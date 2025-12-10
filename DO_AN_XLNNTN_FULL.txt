@@ -1,0 +1,290 @@
+ĐỒ ÁN
+
+XỬ LÝ NGÔN NGỮ TỰ NHIÊN
+(HK1 / 2025-2026)
+
+ĐỀ TÀI: DỊCH MÁY ANH-PHÁP / ANH-ĐỨC VỚI MÔ HÌNH
+ENCODER-DECODER LSTM
+
+================================================================================
+
+1. Quy định
+   • Nhóm đồ án: Tối đa 2 sinh viên.
+   • Thời hạn nộp: 14/12/2025 (23:59).
+   • Hình thức nộp: 01 file PDF duy nhất (báo cáo + mã nguồn trong phụ lục) qua hệ
+     thống E-Learning.
+   • Không chấp nhận nộp trễ.
+
+================================================================================
+
+2. Giới thiệu
+
+Bài tập yêu cầu sinh viên triển khai từ đầu một mô hình Encoder-Decoder sử dụng
+LSTM để giải quyết bài toán dịch từ tiếng Anh sang tiếng Pháp.
+Mô hình sử dụng context vector cổ điển từ Encoder (không bắt buộc sử dụng cơ chế
+attention).
+
+Sinh viên sẽ:
+   • Xử lý dữ liệu chuỗi song song.
+   • Huấn luyện mô hình với PyTorch.
+   • Thực hiện dự đoán và đánh giá hiệu suất.
+   • Phân tích lỗi và đề xuất cải tiến.
+
+Công cụ: Python + PyTorch (không dùng thư viện seq2seq có sẵn như torchtext.legacy
+hoặc transformers).
+
+================================================================================
+
+3. Mục tiêu
+   1. Hiểu và triển khai kiến trúc Encoder-Decoder LSTM với context vector cổ điển.
+   2. Xử lý dữ liệu chuỗi, huấn luyện, đánh giá bằng BLEU score.
+   3. Phân tích lỗi dịch thuật và đề xuất cải tiến (ví dụ: thêm attention, beam search...).
+
+================================================================================
+
+4. Yêu cầu chung
+
+┌─────────────┬──────────────────────────────────────────────────────────────┐
+│  Yêu cầu    │                         Nội dung                             │
+├─────────────┼──────────────────────────────────────────────────────────────┤
+│ Triển bài   │ Xây dựng mô hình từ đầu, không dùng seq2seq có sẵn.         │
+├─────────────┼──────────────────────────────────────────────────────────────┤
+│ Công cụ     │ Python, PyTorch (phiên bản ≥ 1.13).                          │
+├─────────────┼──────────────────────────────────────────────────────────────┤
+│ Sản phẩm nộp│ 1. Mã nguồn (Jupyter Notebook hoặc .py, có chú thích rõ ràng)│
+│             │ 2. Báo cáo PDF.                                              │
+│             │ 3. Checkpoint mô hình (file .pth tốt nhất).                  │
+└─────────────┴──────────────────────────────────────────────────────────────┘
+
+================================================================================
+
+5. Dataset
+
+Chính thức: Multi30K (en-fr)
+   • Kích thước:
+      o Train: 29,000 cặp
+      o Validation: 1,000 cặp
+      o Test: 1,000 cặp
+   • Đặc điểm: Câu ngắn (10–15 từ), phù hợp CPU/GPU cơ bản.
+   • Link tải:
+     →
+     → File: train.en, train.fr, val.en, val.fr, test.en, test.fr
+     
+     Lưu ý: torchtext.datasets.Multi30K chỉ hỗ trợ en-de. Với en-fr, phải tải file
+     raw và tự xây dataset.
+
+Tùy chọn mở rộng (không bắt buộc)
+   • WMT 2014 English-French (~36 triệu cặp)
+     → Link: http://www.statmt.org/wmt14/translation-task.html
+     → File: en-fr.tgz
+
+================================================================================
+
+6. Hướng dẫn triển khai
+
+6.1. Chuẩn bị dữ liệu
+
+# Cài đặt
+pip install spacy torch torchtext
+
+python -m spacy download en_core_web_sm
+
+python -m spacy download fr_core_news_sm
+
+Tokenization
+from torchtext.data.utils import get_tokenizer
+
+en_tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
+
+fr_tokenizer = get_tokenizer('spacy', language='fr_core_news_sm')
+
+Xây dựng từ điển (Vocabulary)
+   • Dùng build_vocab_from_iterator.
+   • Thêm token đặc biệt: <unk>, <pad>, <sos>, <eos>.
+   • Giới hạn: 10,000 từ phổ biến nhất mỗi ngôn    ngữ.
+
+Padding & Packing
+   • Dùng pad_sequence để đồng bộ độ dài trong batch.
+   • Dùng pack_padded_sequence trước khi vào LSTM.
+   • Sắp xếp batch theo độ dài giảm dần → enforce_sorted=True.
+
+DataLoader
+   • Batch size: 32–128
+   • Sử dụng collate_fn tùy chỉnh để xử lý padding và packing.
+
+================================================================================
+
+6.2. Xây dựng mô hình
+
+Encoder
+   (h_t, c_t) = LSTM(embed(x_t), (h_{t-1}, c_{t-1}))
+
+   • Input: Chuỗi token tiếng Anh → embedding (size 256–512).
+   • Output:
+      o Chuỗi hidden states (h_1,..., h_n)
+      o Context vector = (h_n, c_n) → truyền sang Decoder.
+
+Decoder
+   (ĥ_t, ĉ_t) = LSTM(embed(y_{t-1}), (ĥ_{t-1}, ĉ_{t-1}))
+
+   p(y_t) = softmax(Linear(ĥ_t))
+
+   • Input:
+      o Ban đầu: <sos> + context vector từ Encoder.
+      o Các bước sau: token trước đó (ground truth hoặc dự đoán).
+   • Output: Xác suất từ tiếp theo trong tiếng Pháp.
+
+Tham số khuyến nghị
+┌──────────────────────┬──────────┐
+│      Tham số         │  Giá trị │
+├──────────────────────┼──────────┤
+│ Hidden size          │   512    │
+│ Embedding dim        │ 256–512  │
+│ Số layer LSTM        │    2     │
+│ Dropout              │ 0.3–0.5  │
+│ Teacher forcing ratio│   0.5    │
+└──────────────────────┴──────────┘
+
+================================================================================
+
+6.3. Huấn luyện mô hình
+
+┌─────────────────┬──────────────────────────────────────────────────┐
+│  Thành phần     │                  Cấu hình                        │
+├─────────────────┼──────────────────────────────────────────────────┤
+│ Loss            │ nn.CrossEntropyLoss(ignore_index=pad_idx)        │
+├─────────────────┼──────────────────────────────────────────────────┤
+│ Optimizer       │ Adam(lr=0.001)                                   │
+├─────────────────┼──────────────────────────────────────────────────┤
+│ Epoch           │ 10–20                                            │
+├─────────────────┼──────────────────────────────────────────────────┤
+│ Early stopping  │ Dừng nếu val_loss không giảm sau 3 epoch        │
+├─────────────────┼──────────────────────────────────────────────────┤
+│ Scheduler       │ ReduceLROnPlateau (tùy chọn)                     │
+├─────────────────┼──────────────────────────────────────────────────┤
+│ Theo dõi        │ Train/val loss, lưu best model                   │
+└─────────────────┴──────────────────────────────────────────────────┘
+
+Teacher Forcing
+if random.random() < 0.5:
+    decoder_input = target[:, t]  # Ground truth
+else:
+    decoder_input = predicted_token  # Dự đoán
+
+================================================================================
+
+6.4. Dự đoán (Inference)
+   • Greedy decoding: Chọn token có xác suất cao nhất.
+   • Dừng khi gặp <eos> hoặc đạt độ dài tối đa 50.
+   • Yêu cầu bắt buộc: Viết hàm translate(sentence: str) -> str nhận câu tiếng
+     Anh, trả về câu tiếng Pháp.
+
+def translate(sentence):
+    # Tokenize → tensor → encoder → decoder → detokenize
+    # Codes
+    return translated_french_sentence
+
+================================================================================
+
+6.5. Đánh giá
+
+┌─────────────┬──────────────────────────────────────────────────────────┐
+│   Chỉ số    │                      Cách tính                           │
+├─────────────┼──────────────────────────────────────────────────────────┤
+│ BLEU score  │ nltk.translate.bleu_score.sentence_bleu (trên tập test)  │
+├─────────────┼──────────────────────────────────────────────────────────┤
+│ Perplexity  │ Tùy chọn                                                 │
+├─────────────┼──────────────────────────────────────────────────────────┤
+│ Báo cáo     │ BLEU trung bình + 5 ví dụ dịch (đúng/sai) + phân tích lỗi│
+└─────────────┴──────────────────────────────────────────────────────────┘
+
+================================================================================
+
+7. Phần mở rộng (tùy chọn, + điểm cộng)
+   1. Dùng dataset WMT 2014.
+   2. Tăng số layer LSTM hoặc hidden size.
+   3. Thay greedy decoding bằng beam search (beam size = 3–5).
+   4. Thêm attention mechanism (Luong/Bahdanau).
+   5. So sánh hiệu suất với mô hình có attention.
+
+================================================================================
+
+8. Xử lý các phần khó
+
+┌─────────────────────────────────┬──────────────────────────────────────────┐
+│             Vấn đề              │                Giải pháp                 │
+├─────────────────────────────────┼──────────────────────────────────────────┤
+│ Độ dài chuỗi khác nhau          │ pack_padded_sequence + sort batch theo   │
+│                                 │ độ dài                                   │
+├─────────────────────────────────┼──────────────────────────────────────────┤
+│ Teacher forcing & exposure bias │ Dùng tỷ lệ 0.5, hoặc scheduled sampling  │
+├─────────────────────────────────┼──────────────────────────────────────────┤
+│ Overfitting                     │ Dropout, giới hạn độ dài câu (≤50),      │
+│                                 │ early stopping                           │
+├─────────────────────────────────┼──────────────────────────────────────────┤
+│ Loss không giảm                 │ Kiểm tra: learning rate, chuẩn hóa dữ    │
+│                                 │ liệu, shape tensor                       │
+└─────────────────────────────────┴──────────────────────────────────────────┘
+
+================================================================================
+
+9. Phân tích lỗi (bắt buộc trong báo cáo)
+   • Lỗi phổ biến:
+      o Từ hiếm (OOV) → <unk>
+      o Câu dài → mất thông tin (do context vector cố định)
+      o Dịch sai ngữ pháp, thiếu từ
+   • Đề xuất cải tiến:
+      o Thêm attention
+      o Dùng subword (BPE)
+      o Beam search
+
+================================================================================
+
+10. Thang điểm đánh giá (10 điểm)
+
+┌──────────────────────────────────────────────────────────┬──────┐
+│                         Tiêu chí                         │ Điểm │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 1. Triển khai mô hình đúng (Encoder-Decoder LSTM)       │  3.0 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 2. Xử lý dữ liệu, DataLoader, padding/packing           │  2.0 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 3. Huấn luyện ổn định, có early stopping, lưu checkpoint│  1.5 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 4. Hàm translate() hoạt động với câu mới                │  1.0 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 5. Đánh giá BLEU score + biểu đồ loss                   │  1.0 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 6. Phân tích 5 ví dụ lỗi + đề xuất cải tiến             │  1.0 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 7. Chất lượng mã nguồn (sạch, có comment, cấu trúc rõ)  │  0.5 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ 8. Báo cáo (đầy đủ, rõ ràng, có biểu đồ, trích dẫn)    │  0.5 │
+├──────────────────────────────────────────────────────────┼──────┤
+│ Điểm cộng (mở rộng)                                      │  1.0 │
+└──────────────────────────────────────────────────────────┴──────┘
+
+Tổng: 10
+
+================================================================================
+
+11. Lưu ý quan trọng
+   1. Mã nguồn phải chạy được từ đầu đến cuối trên Google Colab hoặc máy local.
+   2. Báo cáo PDF phải bao gồm:
+      o Sơ đồ kiến trúc
+      o Biểu đồ train/val loss
+      o BLEU score
+      o 5 ví dụ dịch + phân tích
+      o Chương trình nguồn (trong Phụ lục)
+   3. Checkpoint mô hình (best_model.pth) bắt buộc nộp.
+   4. Không sao chép mã → sẽ bị 0 điểm.
+
+================================================================================
+
+Tài liệu tham khảo
+
+   • Sutskever et al. (2014). Sequence to Sequence Learning with Neural Networks.
+   • PyTorch Documentation: torch.nn.LSTM
+   • Multi30K Dataset: https://github.com/multi30k/dataset
+
+================================================================================

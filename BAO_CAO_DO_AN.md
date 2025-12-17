@@ -20,6 +20,7 @@
 - 3122411223 - Đỗ Anh Triết
 - 3122411201 - Nguyễn Võ Minh Thư
 
+**Ngày hoàn thành:** Tháng 12 năm 2025  
 **Thành phố Hồ Chí Minh, năm 2025**
 
 ---
@@ -74,18 +75,19 @@ Mô hình Neural Machine Translation (NMT) sử dụng kiến trúc Encoder-Deco
 
 | Tham số                 | Giá trị |
 | ----------------------- | ------- |
-| Embedding dimension     | 256     |
-| Hidden size             | 384     |
+| Embedding dimension     | 384     |
+| Hidden size             | 512     |
 | Số layer LSTM           | 2       |
-| Dropout                 | 0.6     |
-| Teacher forcing ratio   | 0.3     |
+| Dropout                 | 0.5     |
+| Teacher forcing ratio   | 0.5     |
 | Batch size              | 64      |
-| Learning rate           | 0.001   |
-| Weight decay            | 1e-5    |
+| Learning rate           | 0.0005  |
+| Weight decay            | 1e-4    |
 | Label smoothing         | 0.1     |
 | Gradient clipping       | 0.5     |
+| Số epochs               | 20      |
 | Early stopping patience | 3       |
-| Total parameters        | ~17.5M  |
+| Total parameters        | ~24.5M  |
 
 ---
 
@@ -103,9 +105,9 @@ Input (English) → Encoder → Context Vector → Decoder → Output (French)
 
 **Cấu trúc:**
 
-- **Embedding Layer:** 10,000 từ → 256 chiều
-- **Dropout:** p = 0.6 (giảm overfitting)
-- **LSTM:** 2 layers, hidden_size = 384
+- **Embedding Layer:** 10,000 từ → 384 chiều
+- **Dropout:** p = 0.5 (giảm overfitting)
+- **LSTM:** 2 layers, hidden_size = 512
 - **Packing:** pack_padded_sequence() để xử lý câu có độ dài khác nhau
 
 **Công thức LSTM:**
@@ -114,9 +116,9 @@ Input (English) → Encoder → Context Vector → Decoder → Output (French)
 (h_t, c_t) = LSTM(embed(x_t), (h_{t-1}, c_{t-1}))
 ```
 
-**Input:** `[src_len, batch, 256]`  
-**Output:** `[src_len, batch, 384]`  
-**Context Vector:** `(h_n, c_n)` với shape `[2, batch, 384]` - Bottleneck chứa toàn bộ thông tin câu nguồn
+**Input:** `[src_len, batch, 384]`  
+**Output:** `[src_len, batch, 512]`  
+**Context Vector:** `(h_n, c_n)` với shape `[2, batch, 512]` - Bottleneck chứa toàn bộ thông tin câu nguồn
 
 ### 2.3. Decoder
 
@@ -126,12 +128,12 @@ Input (English) → Encoder → Context Vector → Decoder → Output (French)
 
 - **Initial State:** Nhận `(h_n, c_n)` từ Encoder
 - **Input:** Bắt đầu bằng token `<sos>`
-- **Embedding Layer:** 10,000 từ → 256 chiều
-- **Dropout:** p = 0.6
-- **LSTM:** 2 layers, hidden_size = 384
-- **Linear Layer:** 384 → 10,000 (vocabulary size)
+- **Embedding Layer:** 10,000 từ → 384 chiều
+- **Dropout:** p = 0.5
+- **LSTM:** 2 layers, hidden_size = 512
+- **Linear Layer:** 512 → 10,000 (vocabulary size)
 - **Softmax:** Tính xác suất từ vựng đầu ra
-- **Teacher Forcing:** Tỷ lệ 0.3 (sử dụng ground truth 30% thời gian)
+- **Teacher Forcing:** Tỷ lệ 0.5 (sử dụng ground truth 50% thời gian)
 
 **Công thức:**
 
@@ -142,10 +144,10 @@ p(y_t) = softmax(Linear(ĥ_t))
 
 ### 2.4. Kỹ thuật chống overfitting
 
-1. **Dropout cao (0.6):** Giảm phụ thuộc vào neuron cụ thể
+1. **Dropout trung bình (0.5):** Giảm phụ thuộc vào neuron cụ thể
 2. **Label Smoothing (0.1):** Làm mềm one-hot targets để giảm overconfidence
-3. **Weight Decay (1e-5):** L2 regularization cho trọng số
-4. **Teacher Forcing thấp (0.3):** Giảm exposure bias
+3. **Weight Decay (1e-4):** L2 regularization cho trọng số
+4. **Teacher Forcing cân bằng (0.5):** Cân bằng giữa học và tổng quát
 5. **Gradient Clipping (0.5):** Tránh exploding gradients
 6. **Early Stopping (patience=3):** Dừng khi validation loss không giảm trong 3 epochs
 
@@ -158,37 +160,48 @@ p(y_t) = softmax(Linear(ĥ_t))
 ```python
 N_EPOCHS = 20
 BATCH_SIZE = 64
-LEARNING_RATE = 0.001
-OPTIMIZER = Adam(lr=0.001, weight_decay=1e-5)
+LEARNING_RATE = 0.0005
+OPTIMIZER = Adam(lr=0.0005, weight_decay=1e-4)
 CRITERION = CrossEntropyLoss(ignore_index=pad_idx, label_smoothing=0.1)
-SCHEDULER = ReduceLROnPlateau(factor=0.5, patience=2)
+SCHEDULER = ReduceLROnPlateau(factor=0.5, patience=3)
 CLIP = 0.5
-TEACHER_FORCING_RATIO = 0.3
+TEACHER_FORCING_RATIO = 0.5
 EARLY_STOPPING_PATIENCE = 3
 SEED = 42  # Reproducibility
 ```
 
 ### 3.2. Biểu đồ Training/Validation Loss
 
-_Lưu ý: Biểu đồ và kết quả chi tiết sẽ được cập nhật sau khi hoàn tất huấn luyện_
+**Mô tả:**
 
-**Mô tả dự kiến:**
+Biểu đồ sẽ được tạo tự động sau khi hoàn tất huấn luyện 20 epochs, bao gồm:
 
-- **Train Loss:** Giảm dần từ ~4.5 xuống ~2.0-2.5
-- **Val Loss:** Giảm từ ~4.0 xuống ~2.5-3.0
-- **Gap train-val:** ~0.5 (chấp nhận được với các kỹ thuật anti-overfitting)
-- **Nhận xét:** Loss giảm đều trong 10 epoch đầu. Từ epoch 10-15, Val loss bắt đầu ổn định hoặc tăng nhẹ. Early stopping kích hoạt khi val loss không giảm trong 3 epochs liên tiếp.
+1. **Training/Validation Loss Curve**: Thể hiện sự giảm dần của loss qua các epochs
+2. **Training/Validation Perplexity Curve**: Thể hiện độ phức tạp của model qua các epochs
+
+**Dự kiến xu hướng:**
+
+- **Train Loss:** Giảm dần từ ~5.5 → ~4.0 (giảm ~27% sau 20 epochs)
+- **Val Loss:** Giảm từ ~5.4 → ~4.5 (giảm ~17% sau 20 epochs)
+- **Gap train-val:** ~0.5 (chấp nhận được với các kỹ thuật regularization)
+- **Nhận xét:** 
+  - Loss giảm nhanh trong 6 epoch đầu
+  - Từ epoch 7 trở đi, loss giảm chậm dần và ổn định
+  - Early stopping có thể kích hoạt nếu val loss không giảm trong 3 epochs liên tiếp
+  - Perplexity giảm từ ~260 xuống ~90, cho thấy model dự đoán tốt hơn
 
 ### 3.3. Kết quả tốt nhất
 
-_Sẽ được cập nhật sau khi train_
+**Kết quả dự kiến sau khi huấn luyện:**
 
 ```
-Best Epoch: XX/20
-  Train Loss: X.XXX | Train PPL: XX.XX
-  Val Loss:   X.XXX | Val PPL:   XX.XX
-  Time per epoch: ~X.XX minutes
+Best Epoch: [Sẽ được cập nhật]/20
+  Train Loss: ~4.0 | Train PPL: ~55
+  Val Loss:   ~4.5 | Val PPL:   ~93
+  Time per epoch: ~3-5 minutes
 ```
+
+**Lưu ý:** Kết quả chi tiết sẽ được cập nhật sau khi chạy cell huấn luyện trong notebook. Model tốt nhất được lưu tự động vào file `best_model.pth` dựa trên validation loss thấp nhất.
 
 ### 3.4. Thời gian huấn luyện
 
@@ -209,35 +222,37 @@ Best Epoch: XX/20
 
 ### 4.2. Kết quả BLEU Score trung bình
 
-_Sẽ được cập nhật sau khi đánh giá hoàn tất_
-
-**Mục tiêu:**
+**Kết quả dự kiến:**
 
 - **Average BLEU Score:** 0.25-0.35 (25-35%)
+- **Phương pháp tính:** Sử dụng NLTK `sentence_bleu()` với SmoothingFunction.method1
+- **Số mẫu đánh giá:** 1,000 cặp câu từ tập test
+- **Lưu ý:** Kết quả chính xác sẽ được cập nhật sau khi chạy cell đánh giá BLEU trong notebook
 
 ### 4.3. Phân bố BLEU Score
 
-_Sẽ được cập nhật sau khi đánh giá_
-
 **Phân loại dự kiến:**
 
-- **Excellent (≥ 0.5):** XXX câu (XX%)
-- **Good (0.3-0.5):** XXX câu (XX%)
-- **Fair (0.1-0.3):** XXX câu (XX%)
-- **Poor (< 0.1):** XXX câu (XX%)
+| Mức độ            | BLEU Score | Số câu dự kiến | Tỷ lệ dự kiến |
+| ----------------- | ---------- | -------------- | ------------- |
+| Excellent (Xuất sắc) | ≥ 0.5   | ~100-150 câu   | 10-15%        |
+| Good (Tốt)        | 0.3-0.5    | ~300-400 câu   | 30-40%        |
+| Fair (Trung bình) | 0.1-0.3    | ~350-450 câu   | 35-45%        |
+| Poor (Kém)        | < 0.1      | ~100-150 câu   | 10-15%        |
 
-**Đánh giá:**
+**Đánh giá tổng quan:**
 
-- ~40-45% đạt mức Khá/Tốt
-- ~40% ở mức Trung bình
-- ~15-20% dịch kém
+- ~40-55% câu đạt mức Tốt/Xuất sắc (BLEU ≥ 0.3)
+- ~35-45% câu ở mức Trung bình (BLEU 0.1-0.3)
+- ~10-15% câu dịch kém (BLEU < 0.1)
+- Biểu đồ histogram sẽ được tạo tự động và lưu vào file `bleu_distribution.png`
 
 ### 4.4. So sánh với baseline
 
 | Mô hình            | BLEU Score | Số tham số |
 | ------------------ | ---------- | ---------- |
-| LSTM (Đồ án này)   | 25-35%     | ~17.5M     |
-| LSTM + Attention   | 32-38%     | ~20M       |
+| LSTM (Đồ án này)   | 25-35%     | ~24.5M     |
+| LSTM + Attention   | 32-38%     | ~27M       |
 | Transformer (base) | 38-42%     | ~65M       |
 | GPT-4              | >50%       | ~1.7T      |
 
@@ -245,70 +260,42 @@ _Sẽ được cập nhật sau khi đánh giá_
 
 ## 5. VÍ DỤ DỊCH VÀ PHÂN TÍCH
 
-_Các ví dụ cụ thể sẽ được lấy từ notebook sau khi chạy cell dịch_
+**Lưu ý:** 10 ví dụ dịch chi tiết sẽ được tạo tự động bởi notebook sau khi chạy cell đánh giá. Các ví dụ sẽ được chọn từ các chỉ số: 0, 10, 50, 100, 200, 300, 400, 500, 700, 900 để đảm bảo đa dạng.
 
-### Ví dụ 1 (Tốt - BLEU > 0.5)
+### Cấu trúc mỗi ví dụ:
 
 ```
-Source:    A young girl climbing on a wooden structure.
-Reference: Une jeune fille grimpe sur une structure en bois.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
+Source (EN):     [Câu tiếng Anh gốc]
+Reference (FR):  [Câu tiếng Pháp tham chiếu]
+Predicted (FR):  [Câu tiếng Pháp dự đoán bởi model]
+BLEU Score:      [Điểm BLEU từ 0.0 đến 1.0]
 ```
 
-**Nhận xét:** Dịch chính xác hoàn toàn về cả từ vựng và ngữ pháp.
+### Phân loại ví dụ dự kiến:
+
+#### **Ví dụ Xuất sắc (BLEU ≥ 0.5)**
+- **Đặc điểm:** Dịch chính xác về cả từ vựng, ngữ pháp, và cấu trúc
+- **Dự kiến:** 1-2 ví dụ trong 10 ví dụ
+- **Nhận xét:** Model nắm bắt tốt câu ngắn (10-15 từ) với từ vựng phổ biến
+
+#### **Ví dụ Tốt (BLEU 0.3-0.5)**
+- **Đặc điểm:** Truyền đạt đúng ý chính, có thể khác cấu trúc nhưng vẫn đúng nghĩa
+- **Dự kiến:** 3-4 ví dụ trong 10 ví dụ
+- **Nhận xét:** Dùng từ đồng nghĩa hoặc cấu trúc câu khác nhưng vẫn hợp lý
+
+#### **Ví dụ Trung bình (BLEU 0.1-0.3)**
+- **Đặc điểm:** Có lỗi ngữ pháp hoặc thiếu một số từ, nhưng vẫn hiểu được ý chính
+- **Dự kiến:** 3-4 ví dụ trong 10 ví dụ
+- **Nhận xét:** Sai giới từ, sai thì động từ, hoặc thiếu tính từ không quan trọng
+
+#### **Ví dụ Kém (BLEU < 0.1)**
+- **Đặc điểm:** Mất ý nghĩa chính, lặp từ, hoặc sai hoàn toàn cấu trúc
+- **Dự kiến:** 1-2 ví dụ trong 10 ví dụ
+- **Nhận xét:** Câu dài (>20 từ), nhiều từ hiếm, hoặc cấu trúc phức tạp
 
 ---
 
-### Ví dụ 2 (Khá - BLEU 0.3-0.5)
-
-```
-Source:    Two dogs are playing in the snow.
-Reference: Deux chiens jouent dans la neige.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
-```
-
-**Nhận xét:** Truyền đạt đúng ý chính, đúng từ khóa quan trọng.
-
----
-
-### Ví dụ 3 (Trung bình - BLEU 0.1-0.3)
-
-```
-Source:    A man in a blue shirt is standing on a ladder working on a house.
-Reference: Un homme en chemise bleue se tient sur une échelle et travaille sur une maison.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
-```
-
-**Nhận xét dự kiến:** Có thể dùng từ đồng nghĩa khác (vd: "se trouve" thay vì "se tient") hoặc cấu trúc khác (vd: "pour travailler" thay vì "et travaille").
-
----
-
-### Ví dụ 4 (Kém - BLEU < 0.1)
-
-```
-Source:    A group of people are gathered around a table with food.
-Reference: Un groupe de personnes est rassemblé autour d'une table avec de la nourriture.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
-```
-
-**Nhận xét dự kiến:** Có thể thiếu động từ chính hoặc dùng từ informal thay vì formal.
-
----
-
-### Ví dụ 5 (Sai - BLEU ≈ 0)
-
-```
-Source:    The photographer is taking a picture of a beautiful sunset over the mountains.
-Reference: Le photographe prend une photo d'un magnifique coucher de soleil sur les montagnes.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
-```
-
-**Nhận xét dự kiến:** Mất thông tin quan trọng (vd: "coucher de soleil"), sai ngữ pháp, hoặc lặp từ.
+**Hướng dẫn lấy kết quả:** Sau khi chạy cell "9.1. Hiển thị 10 ví dụ dịch" trong notebook, copy 10 ví dụ và paste vào phần này để hoàn thiện báo cáo.
 
 ---
 
@@ -464,7 +451,7 @@ h_t = [h_t^forward; h_t^backward]
 | Tiêu chí      | LSTM (Đồ án) | LSTM + Attention | Transformer |
 | ------------- | ------------ | ---------------- | ----------- |
 | BLEU Score    | 25-35%       | 32-38%           | 38-42%      |
-| Số tham số    | ~17.5M       | ~20M             | ~65M        |
+| Số tham số    | ~24.5M       | ~27M             | ~65M        |
 | Training time | 1-2h         | 2-3h             | 4-6h        |
 | VRAM          | 4GB          | 6GB              | 8GB+        |
 | Độ phức tạp   | Đơn giản     | Trung bình       | Cao         |
@@ -476,24 +463,28 @@ Mô hình Encoder-Decoder LSTM là **baseline vững chắc** để nghiên cứ
 
 **Điểm mạnh:**
 
-- ✅ Triển khai đơn giản, dễ hiểu
-- ✅ Huấn luyện nhanh trên GPU nhỏ
-- ✅ Baseline tốt để so sánh
-- ✅ Code rõ ràng, dễ mở rộng
+- ✅ Triển khai đơn giản, dễ hiểu, phù hợp cho mục đích học tập
+- ✅ Huấn luyện nhanh trên GPU nhỏ (3-5 phút/epoch)
+- ✅ Baseline tốt để so sánh với các mô hình nâng cao
+- ✅ Code rõ ràng với comment đầy đủ, dễ mở rộng
+- ✅ Áp dụng đầy đủ các kỹ thuật regularization (dropout, label smoothing, weight decay, gradient clipping)
+- ✅ Đảm bảo reproducibility với seed configuration
 
 **Điểm yếu:**
 
-- ❌ Context vector cố định
-- ❌ Không xử lý tốt câu dài
-- ❌ BLEU thấp hơn mô hình hiện đại
-- ❌ OOV với từ hiếm
+- ❌ Context vector cố định (384 chiều) - bottleneck thông tin
+- ❌ Không xử lý tốt câu dài (>20 từ) do thiếu Attention mechanism
+- ❌ BLEU score thấp hơn mô hình hiện đại (25-35% so với 38-42% của Transformer)
+- ❌ OOV với từ hiếm (vocabulary giới hạn 10,000 từ)
+- ❌ Greedy decoding không tối ưu toàn cục
 
 **Ứng dụng thực tế:**
 
-- Nghiên cứu và giảng dạy về NMT
-- Baseline để đánh giá mô hình mới
-- Môi trường với tài nguyên hạn chế
-- Dịch câu ngắn (< 15 từ)
+- ✅ Nghiên cứu và giảng dạy về cơ bản NMT
+- ✅ Baseline để đánh giá và so sánh mô hình mới
+- ✅ Môi trường với tài nguyên hạn chế (GPU 4GB)
+- ✅ Dịch câu ngắn (10-15 từ) với từ vựng phổ biến
+- ❌ Không phù hợp cho production system cần độ chính xác cao
 
 ---
 
@@ -552,7 +543,89 @@ Mô hình Encoder-Decoder LSTM là **baseline vững chắc** để nghiên cứ
 
 ## 10. PHỤ LỤC
 
-### A. Hyperparameters đầy đủ
+### A. Hướng dẫn chạy dự án từ đầu
+
+#### Bước 1: Setup môi trường
+
+```powershell
+# Clone hoặc tải project
+cd C:\Users\Admin\Documents\Project\Project_KiemThuPhanMem\Project_XLNNTN
+
+# Tạo virtual environment
+python -m venv .venv
+
+# Activate environment
+.\.venv\Scripts\Activate.ps1
+
+# Cài đặt thư viện
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torchtext spacy tqdm nltk matplotlib
+
+# Tải spaCy models
+python -m spacy download en_core_web_sm
+python -m spacy download fr_core_news_sm
+```
+
+#### Bước 2: Kiểm tra GPU
+
+```python
+import torch
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+```
+
+#### Bước 3: Chạy notebook
+
+```
+1. Mở VS Code
+2. Mở file: NMT_EnglishFrench_LSTM.ipynb
+3. Chọn kernel: Python 3.x.x (.venv)
+4. Chạy tuần tự từ cell 1 → cell cuối:
+   - Cell 1-4: Import và setup
+   - Cell 5-8: Load và xử lý dữ liệu Multi30K
+   - Cell 9-12: Xây dựng vocabulary và DataLoader
+   - Cell 13-16: Định nghĩa mô hình Encoder-Decoder
+   - Cell 17-20: Training loop (20 epochs, ~60-100 phút)
+   - Cell 21-24: Vẽ biểu đồ loss
+   - Cell 25-28: Đánh giá BLEU score
+   - Cell 29-32: Hiển thị ví dụ dịch và phân tích
+```
+
+#### Bước 4: Lấy kết quả
+
+Sau khi chạy xong, các file được tạo:
+
+- `best_model.pth` - Model tốt nhất (~70MB)
+- `en_vocab.pkl`, `fr_vocab.pkl` - Vocabularies
+- `training_history.pkl` - Lịch sử loss
+- `training_curves.png` - Biểu đồ loss và perplexity
+- `bleu_distribution.png` - Histogram BLEU scores
+
+#### Bước 5: Cập nhật báo cáo
+
+Copy các kết quả từ notebook vào báo cáo:
+
+1. **Section 3.2:** Copy kết quả training (best epoch, loss, PPL)
+2. **Section 3.2:** Insert ảnh `training_curves.png`
+3. **Section 4.2:** Copy average BLEU score
+4. **Section 4.3:** Copy phân bố BLEU scores
+5. **Section 4.3:** Insert ảnh `bleu_distribution.png`
+6. **Section 5:** Copy 10 ví dụ dịch từ cell output
+
+#### Bước 6: Xuất báo cáo PDF
+
+```powershell
+# Sử dụng pandoc để convert Markdown → PDF
+pandoc BAO_CAO_DO_AN.md -o BAO_CAO_DO_AN.pdf --pdf-engine=xelatex -V geometry:margin=2cm
+
+# Hoặc sử dụng Typora/VS Code extension để export PDF
+```
+
+---
+
+### B. Hyperparameters đầy đủ
 
 ```python
 # ==================== Vocabulary ====================
@@ -562,24 +635,24 @@ MAX_VOCAB_SIZE = 10000
 MIN_FREQ = 2           # Minimum word frequency
 
 # ==================== Model Architecture ====================
-EMB_DIM = 256          # Embedding dimension
-HIDDEN_DIM = 384       # Hidden size (giảm từ 512 để tránh overfitting)
+EMB_DIM = 384          # Embedding dimension (tăng từ 256)
+HIDDEN_DIM = 512       # Hidden size (tăng từ 384)
 N_LAYERS = 2           # Number of LSTM layers
-DROPOUT = 0.6          # Dropout rate (tăng từ 0.5 để giảm overfitting)
+DROPOUT = 0.5          # Dropout rate
 
 # ==================== Training ====================
 N_EPOCHS = 20
 BATCH_SIZE = 64
-LEARNING_RATE = 0.001
-WEIGHT_DECAY = 1e-5    # L2 regularization
-LABEL_SMOOTHING = 0.1  # Label smoothing (giảm overconfidence)
-CLIP = 0.5             # Gradient clipping (giảm từ 1.0)
-TEACHER_FORCING_RATIO = 0.3  # Teacher forcing ratio (giảm từ 0.5)
+LEARNING_RATE = 0.0005 # Learning rate (giảm từ 0.001)
+WEIGHT_DECAY = 1e-4    # L2 regularization (tăng từ 1e-5)
+LABEL_SMOOTHING = 0.1  # Label smoothing
+CLIP = 0.5             # Gradient clipping
+TEACHER_FORCING_RATIO = 0.5  # Teacher forcing ratio (cân bằng)
 
 # ==================== Regularization ====================
-EARLY_STOPPING_PATIENCE = 5    # Early stopping patience (giảm từ 10)
+EARLY_STOPPING_PATIENCE = 3    # Early stopping patience
 SCHEDULER_FACTOR = 0.5         # LR reduction factor
-SCHEDULER_PATIENCE = 2         # LR scheduler patience
+SCHEDULER_PATIENCE = 3         # LR scheduler patience
 
 # ==================== Reproducibility ====================
 SEED = 42
@@ -742,32 +815,45 @@ BLEU = 0.779 × exp(0.25×(log(1.0) + log(0.67) + log(0.5) + log(0.0001)))
 
 #### 1. Cài đặt môi trường
 
-```bash
+```powershell
 # Tạo virtual environment
 python -m venv .venv
 
 # Activate (Windows PowerShell)
-.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
+
+# Nếu gặp lỗi ExecutionPolicy, chạy lệnh sau:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 # Activate (Windows CMD)
 .venv\Scripts\activate.bat
 
 # Activate (Linux/Mac)
 source .venv/bin/activate
+
+# Kiểm tra Python version
+python --version  # Yêu cầu: Python 3.8+
 ```
 
 #### 2. Cài đặt thư viện
 
-```bash
-# PyTorch với CUDA 11.8
+```powershell
+# PyTorch với CUDA 11.8 (cho GPU)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-# Các thư viện khác
-pip install torchtext spacy tqdm nltk datasets scikit-learn matplotlib seaborn pandas
+# PyTorch CPU-only (nếu không có GPU)
+pip install torch torchvision torchaudio
 
-# Tải spaCy models
+# Các thư viện cần thiết
+pip install torchtext spacy tqdm nltk matplotlib
+
+# Tải spaCy models cho tokenization
 python -m spacy download en_core_web_sm
 python -m spacy download fr_core_news_sm
+
+# Kiểm tra cài đặt thành công
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
+python -c "import spacy; print(f'spaCy: {spacy.__version__}')"
 ```
 
 #### 3. Kiểm tra GPU
@@ -783,13 +869,19 @@ if torch.cuda.is_available():
 
 #### 4. Chạy notebook
 
-```bash
-# Khởi động Jupyter
+```powershell
+# Khởi động Jupyter Notebook (nếu dùng Jupyter)
 jupyter notebook
 
-# Hoặc chạy cell trong VS Code
-# Ctrl+Enter: Chạy cell hiện tại
-# Shift+Enter: Chạy cell và chuyển sang cell tiếp theo
+# Hoặc sử dụng VS Code (khuyến nghị)
+# 1. Mở file NMT_EnglishFrench_LSTM.ipynb trong VS Code
+# 2. Chọn Python interpreter (từ .venv)
+# 3. Chạy từng cell theo thứ tự:
+#    - Ctrl+Enter: Chạy cell hiện tại
+#    - Shift+Enter: Chạy cell và chuyển sang cell tiếp theo
+#    - Ctrl+Shift+P → "Run All Cells": Chạy tất cả cells
+
+# Lưu ý: Chạy tuần tự từ cell đầu đến cuối để đảm bảo các biến được khởi tạo đúng
 ```
 
 #### 5. Lưu và load model
@@ -831,21 +923,29 @@ with open('fr_vocab.pkl', 'rb') as f:
 
 #### 7. Git commands
 
-```bash
-# Khởi tạo repo
+```powershell
+# Khởi tạo repo (nếu chưa có)
 git init
 git add .
-git commit -m "Initial commit"
+git commit -m "Initial commit: NMT English-French LSTM project"
+
+# Tạo .gitignore để loại trừ file không cần thiết
+# (best_model.pth, *.pkl, __pycache__, .venv/, data/)
+New-Item -Path .gitignore -ItemType File
 
 # Push lên GitHub
-git remote add origin https://github.com/anhtrietrop/Project_XLNNTN.git
+git remote add origin https://github.com/[your-username]/Project_XLNNTN.git
 git branch -M main
 git push -u origin main
 
-# Cập nhật
-git add .
-git commit -m "Update model results"
-git push
+# Cập nhật thường xuyên
+git status                           # Kiểm tra file thay đổi
+git add .                            # Thêm tất cả file mới/thay đổi
+git commit -m "Update: Add training results and BLEU evaluation"
+git push                             # Đẩy lên GitHub
+
+# Xem lịch sử commit
+git log --oneline --graph --all
 ```
 
 ### D. Yêu cầu hệ thống
@@ -853,61 +953,105 @@ git push
 **Phần cứng tối thiểu:**
 
 - **CPU:** Intel Core i5 hoặc AMD Ryzen 5 (4 cores)
-- **RAM:** 8GB (khuyến nghị 16GB)
-- **GPU:** NVIDIA GTX 1060 6GB hoặc cao hơn
-- **Dung lượng:** 10GB trống
+- **RAM:** 8GB (khuyến nghị 16GB để chạy ổn định)
+- **GPU:** NVIDIA GTX 1060 6GB hoặc cao hơn (hoặc CPU-only với thời gian train lâu hơn)
+- **Dung lượng:** 10GB trống (cho code, data, models, và virtual environment)
 
 **Phần cứng khuyến nghị:**
 
 - **CPU:** Intel Core i7 hoặc AMD Ryzen 7 (8 cores)
 - **RAM:** 16GB
-- **GPU:** NVIDIA RTX 3050 4GB trở lên
+- **GPU:** NVIDIA RTX 3050 4GB trở lên (CUDA-enabled)
 - **Dung lượng:** 20GB trống
 
 **Phần mềm:**
 
 - **OS:** Windows 10/11, Ubuntu 20.04+, macOS 11+
-- **Python:** 3.8 - 3.13
+- **Python:** 3.8 - 3.13 (project này dùng Python 3.13.7)
 - **CUDA:** 11.3 - 11.8 (cho GPU training)
-- **cuDNN:** 8.x
+- **cuDNN:** 8.x (đi kèm với PyTorch CUDA)
+- **VS Code:** Khuyến nghị để chạy Jupyter Notebook
 
-**GPU được test:**
+**Cấu hình được test:**
 
-- ✅ NVIDIA GeForce RTX 3050 Laptop (4GB) - Đồ án này
-- ✅ NVIDIA GTX 1660 Ti (6GB)
-- ✅ NVIDIA RTX 3060 (12GB)
-- ❌ Integrated GPU (Intel HD, AMD Radeon) - Quá chậm
+- ✅ **NVIDIA GeForce RTX 3050 Laptop (4GB VRAM)** - Đồ án này
+  - Training time: ~3-5 phút/epoch
+  - Total training: ~60-100 phút (20 epochs)
+- ✅ **NVIDIA GTX 1660 Ti (6GB)** - Chạy tốt
+- ✅ **NVIDIA RTX 3060 (12GB)** - Chạy rất tốt, có thể tăng batch size
+- ⚠️ **CPU-only** - Chạy được nhưng chậm (30-60 phút/epoch)
+- ❌ **Integrated GPU (Intel HD, AMD Radeon)** - Không hỗ trợ CUDA
 
 ### E. Cấu trúc thư mục dự án
 
 ```
-Project/
+Project_XLNNTN/
 │
-├── NMT_EnglishFrench_LSTM.ipynb    # Notebook chính
-├── README.md                        # Hướng dẫn setup
+├── NMT_EnglishFrench_LSTM.ipynb    # Notebook chính (Jupyter)
+├── README.md                        # Hướng dẫn setup và chạy project
 ├── BAO_CAO_DO_AN.md                # Báo cáo chi tiết (file này)
-├── .gitignore                       # Loại trừ file không cần
+├── BaoCao_NMT_English_French.md    # Báo cáo tiếng Anh
+├── DO_AN_XLNNTN_FULL.txt           # Đề bài đồ án
+├── generate_report_charts.py       # Script tạo biểu đồ (nếu có)
+├── .gitignore                       # Loại trừ file không cần commit
 │
-├── data/                            # Dataset (không commit lên git)
-│   ├── train.en.gz
-│   ├── train.fr.gz
-│   ├── val.en.gz
-│   ├── val.fr.gz
-│   ├── test.en.gz
-│   └── test.fr.gz
+├── data/                            # Dataset Multi30K (không commit lên git)
+│   ├── train.en.gz                 # 29,000 câu tiếng Anh
+│   ├── train.fr.gz                 # 29,000 câu tiếng Pháp
+│   ├── val.en.gz                   # 1,014 câu validation EN
+│   ├── val.fr.gz                   # 1,014 câu validation FR
+│   ├── test.en.gz                  # 1,000 câu test EN
+│   └── test.fr.gz                  # 1,000 câu test FR
 │
-├── models/                          # Saved models (không commit)
-│   ├── best_model.pth
-│   ├── en_vocab.pkl
-│   └── fr_vocab.pkl
+├── models/                          # Models đã lưu (không commit, ~70MB)
+│   ├── best_model.pth              # Model tốt nhất (checkpoint)
+│   ├── en_vocab.pkl                # Vocabulary tiếng Anh (pickle)
+│   ├── fr_vocab.pkl                # Vocabulary tiếng Pháp (pickle)
+│   └── training_history.pkl        # Lịch sử loss training/validation
 │
-├── results/                         # Kết quả, biểu đồ
-│   ├── training_loss.png
-│   ├── bleu_distribution.png
-│   └── translation_examples.txt
+├── results/                         # Kết quả, biểu đồ (có thể commit)
+│   ├── training_curves.png         # Biểu đồ loss và perplexity
+│   ├── bleu_distribution.png       # Histogram phân bố BLEU scores
+│   └── translation_examples.txt    # 10 ví dụ dịch mẫu
 │
 └── .venv/                           # Virtual environment (không commit)
-    └── ...
+    ├── Scripts/                     # (Windows)
+    ├── bin/                         # (Linux/Mac)
+    └── Lib/site-packages/          # Thư viện đã cài
+```
+
+**Nội dung file .gitignore:**
+
+```gitignore
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Models và data (file lớn)
+best_model.pth
+*.pth
+*.pkl
+data/
+*.gz
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
 ```
 
 ### F. Troubleshooting phổ biến
@@ -915,68 +1059,259 @@ Project/
 #### Lỗi 1: CUDA out of memory
 
 ```
-RuntimeError: CUDA out of memory
+RuntimeError: CUDA out of memory. Tried to allocate X.XX MiB (GPU 0; X.XX GiB total capacity)
 ```
+
+**Nguyên nhân:** VRAM của GPU không đủ (thường xảy ra với GPU 4GB)
 
 **Giải pháp:**
 
-- Giảm BATCH_SIZE từ 64 → 32 hoặc 16
-- Giảm HIDDEN_DIM từ 384 → 256
-- Dùng gradient accumulation
+```python
+# 1. Giảm batch size
+BATCH_SIZE = 32  # Giảm từ 64 → 32
+# hoặc
+BATCH_SIZE = 16  # Nếu vẫn lỗi
+
+# 2. Giảm hidden dimension
+HIDDEN_DIM = 384  # Giảm từ 512 → 384
+EMB_DIM = 256     # Giảm từ 384 → 256
+
+# 3. Clear cache trước mỗi epoch
+torch.cuda.empty_cache()
+
+# 4. Dùng gradient accumulation (advanced)
+accumulation_steps = 2
+```
 
 #### Lỗi 2: spaCy model not found
 
 ```
-OSError: [E050] Can't find model 'en_core_web_sm'
+OSError: [E050] Can't find model 'en_core_web_sm'. It doesn't seem to be a Python package or a valid path.
 ```
+
+**Nguyên nhân:** Chưa tải spaCy language models
 
 **Giải pháp:**
 
-```bash
+```powershell
+# Tải models
 python -m spacy download en_core_web_sm
 python -m spacy download fr_core_news_sm
+
+# Kiểm tra đã cài thành công
+python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('✓ English model loaded')"
+python -c "import spacy; nlp = spacy.load('fr_core_news_sm'); print('✓ French model loaded')"
 ```
 
-#### Lỗi 3: PyTorch CPU-only
+#### Lỗi 3: PyTorch CPU-only (CUDA not available)
 
+```python
+import torch
+print(torch.cuda.is_available())  # False
 ```
-CUDA available: False
-```
+
+**Nguyên nhân:** Cài PyTorch phiên bản CPU-only hoặc driver CUDA chưa đúng
 
 **Giải pháp:**
 
-```bash
-# Gỡ PyTorch cũ
-pip uninstall torch torchvision torchaudio
+```powershell
+# 1. Kiểm tra GPU và CUDA version
+nvidia-smi  # Xem CUDA version (vd: CUDA 11.8)
 
-# Cài lại với CUDA
+# 2. Gỡ PyTorch cũ
+pip uninstall torch torchvision torchaudio -y
+
+# 3. Cài lại PyTorch với CUDA 11.8
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# 4. Kiểm tra lại
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
 ```
 
-#### Lỗi 4: Loss = NaN
+**Nếu vẫn lỗi:** Cài CUDA Toolkit và cuDNN từ NVIDIA website
+
+#### Lỗi 4: Loss = NaN hoặc Inf
 
 ```
-Epoch 5: Train Loss: nan
+Epoch 5: Train Loss: nan | Train PPL: nan
 ```
+
+**Nguyên nhân:** Gradient explosion hoặc learning rate quá cao
 
 **Giải pháp:**
 
-- Kiểm tra learning rate (quá cao → giảm xuống 0.0001)
-- Tăng gradient clipping (CLIP = 1.0)
-- Kiểm tra dữ liệu có NaN không
+```python
+# 1. Giảm learning rate
+LEARNING_RATE = 0.0001  # Giảm từ 0.0005 → 0.0001
 
-#### Lỗi 5: BLEU score = 0
+# 2. Tăng gradient clipping
+CLIP = 1.0  # Tăng từ 0.5 → 1.0
+
+# 3. Kiểm tra dữ liệu có NaN không
+import numpy as np
+train_data_en = [s for s in train_data_en if len(s.strip()) > 0]
+train_data_fr = [s for s in train_data_fr if len(s.strip()) > 0]
+
+# 4. Thêm weight initialization
+def init_weights(m):
+    for name, param in m.named_parameters():
+        if 'weight' in name:
+            nn.init.normal_(param.data, mean=0, std=0.01)
+        else:
+            nn.init.constant_(param.data, 0)
+            
+model.apply(init_weights)
+```
+
+#### Lỗi 5: BLEU score = 0.0000
 
 ```
 Average BLEU: 0.0000
+Total samples: 1000
 ```
+
+**Nguyên nhân:** Model chưa được train đủ hoặc sai cách tính BLEU
 
 **Giải pháp:**
 
-- Model chưa học được gì → train thêm
-- SmoothingFunction không đúng → dùng method1
-- Max length quá ngắn → tăng lên 50
+```python
+# 1. Kiểm tra model đã được train chưa
+checkpoint = torch.load('best_model.pth')
+print(f"Model trained for {checkpoint['epoch']} epochs")
+print(f"Validation loss: {checkpoint['valid_loss']:.3f}")
+
+# 2. Sử dụng SmoothingFunction để xử lý n-gram=0
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+smoothing = SmoothingFunction()
+bleu = sentence_bleu([ref_tokens], pred_tokens, 
+                     smoothing_function=smoothing.method1)
+
+# 3. Tăng max_length nếu câu dịch bị cắt
+MAX_LEN = 50  # Hoặc 100 cho câu dài
+
+# 4. Kiểm tra tokenization đúng chưa
+print(f"Reference tokens: {ref_tokens}")
+print(f"Predicted tokens: {pred_tokens}")
+
+# 5. Nếu vẫn BLEU=0 → model chưa học gì → train lại từ đầu
+```
+
+---
+
+## 11. CHECKLIST HOÀN THÀNH ĐỒ ÁN
+
+### 11.1. Checklist triển khai code
+
+- [ ] **Cài đặt môi trường**
+  - [ ] Python 3.8+ đã cài đặt
+  - [ ] Virtual environment đã tạo và activate
+  - [ ] PyTorch với CUDA đã cài (hoặc CPU-only)
+  - [ ] spaCy models (en_core_web_sm, fr_core_news_sm) đã tải
+  - [ ] Các thư viện còn lại (torchtext, nltk, matplotlib) đã cài
+
+- [ ] **Xử lý dữ liệu (Section 3)**
+  - [ ] Dataset Multi30K đã tải về (train, val, test)
+  - [ ] Tokenization với spaCy hoạt động đúng
+  - [ ] Vocabulary đã xây dựng (10,000 từ mỗi ngôn ngữ)
+  - [ ] DataLoader đã tạo với batch_size=64
+
+- [ ] **Xây dựng mô hình (Section 6)**
+  - [ ] Encoder LSTM đã implement (2 layers, hidden=512, emb=384)
+  - [ ] Decoder LSTM đã implement (với teacher forcing)
+  - [ ] Seq2Seq model kết hợp Encoder-Decoder
+  - [ ] Model có thể chạy forward pass không lỗi
+
+- [ ] **Huấn luyện (Section 7)**
+  - [ ] Training loop chạy đủ 20 epochs (hoặc early stopping)
+  - [ ] Loss giảm dần qua các epochs
+  - [ ] Best model được lưu vào `best_model.pth`
+  - [ ] Training history được lưu vào `training_history.pkl`
+  - [ ] Biểu đồ loss đã vẽ và lưu (`training_curves.png`)
+
+- [ ] **Đánh giá (Section 8)**
+  - [ ] Hàm translate() hoạt động đúng (greedy decoding)
+  - [ ] BLEU score được tính trên 1,000 câu test
+  - [ ] Average BLEU score trong khoảng 0.25-0.35 (25-35%)
+  - [ ] Biểu đồ phân bố BLEU đã vẽ (`bleu_distribution.png`)
+  - [ ] 10 ví dụ dịch đã hiển thị và phân tích
+
+- [ ] **Phân tích lỗi (Section 9)**
+  - [ ] Phân tích 5 loại lỗi phổ biến (OOV, câu dài, ngữ pháp, thiếu từ, lặp từ)
+  - [ ] Đề xuất 5 cải tiến (Attention, Beam Search, BPE, tăng data, Bi-LSTM)
+  - [ ] Ví dụ minh họa cho từng loại lỗi
+
+### 11.2. Checklist báo cáo
+
+- [ ] **Thông tin cơ bản**
+  - [ ] Tên sinh viên và MSSV đã điền
+  - [ ] Tên giảng viên: Nguyễn Tuấn Đăng
+  - [ ] Lớp: DCT122C4
+  - [ ] Học kỳ: HK1 / 2025-2026
+  - [ ] Ngày hoàn thành đã ghi
+
+- [ ] **Nội dung các section**
+  - [ ] Section 1: Giới thiệu đầy đủ (dataset, kiến trúc, tham số)
+  - [ ] Section 2: Kiến trúc mô hình với công thức toán học
+  - [ ] Section 3: Kết quả huấn luyện (loss, PPL, biểu đồ)
+  - [ ] Section 4: BLEU score và phân bố
+  - [ ] Section 5: 10 ví dụ dịch với phân tích
+  - [ ] Section 6: Phân tích lỗi chi tiết
+  - [ ] Section 7: Đề xuất cải tiến với lý do và kết quả dự kiến
+  - [ ] Section 8: Kết luận tổng hợp
+  - [ ] Section 9: Tài liệu tham khảo (10 nguồn)
+  - [ ] Section 10: Phụ lục (hyperparameters, công thức, commands, troubleshooting)
+
+- [ ] **Hình ảnh và biểu đồ**
+  - [ ] Biểu đồ training/validation loss
+  - [ ] Biểu đồ training/validation perplexity
+  - [ ] Histogram phân bố BLEU scores
+  - [ ] Sơ đồ kiến trúc mô hình (nếu có)
+
+- [ ] **Định dạng**
+  - [ ] Font size phù hợp, dễ đọc
+  - [ ] Code blocks có syntax highlighting
+  - [ ] Bảng biểu rõ ràng
+  - [ ] Công thức toán học render đúng (KaTeX/LaTeX)
+  - [ ] Không có lỗi chính tả
+
+### 11.3. Checklist nộp bài
+
+- [ ] **File cần nộp**
+  - [ ] Báo cáo PDF (BAO_CAO_DO_AN.pdf) - bao gồm code trong phụ lục
+  - [ ] Jupyter Notebook (NMT_EnglishFrench_LSTM.ipynb)
+  - [ ] Model checkpoint (best_model.pth) - nếu yêu cầu
+  - [ ] README.md - hướng dẫn chạy project
+
+- [ ] **Kiểm tra cuối cùng**
+  - [ ] Đọc lại toàn bộ báo cáo một lần
+  - [ ] Chạy lại notebook từ đầu để đảm bảo không lỗi
+  - [ ] Kiểm tra tất cả kết quả (BLEU, loss) đã được cập nhật
+  - [ ] Kiểm tra tên file đúng format
+  - [ ] Kiểm tra dung lượng file không quá lớn
+
+- [ ] **Nộp bài**
+  - [ ] Nộp trước deadline: 14/12/2025 (23:59)
+  - [ ] Nộp qua hệ thống E-Learning
+  - [ ] Kiểm tra email xác nhận nộp thành công
+
+### 11.4. Tiêu chí chấm điểm (tham khảo)
+
+| Tiêu chí                              | Điểm | Ghi chú                                    |
+| ------------------------------------- | ---- | ------------------------------------------ |
+| **1. Xử lý dữ liệu**                  | 1.0  | Tokenization, vocabulary, dataloader       |
+| **2. Xây dựng mô hình**               | 2.0  | Encoder-Decoder LSTM đúng kiến trúc       |
+| **3. Huấn luyện**                     | 2.0  | Training loop, early stopping, save model  |
+| **4. Biểu đồ loss**                   | 1.0  | Rõ ràng, dễ đọc                           |
+| **5. Hàm translate()**                | 1.0  | Greedy decoding hoạt động đúng            |
+| **6. BLEU score**                     | 1.0  | Tính đúng trên tập test                    |
+| **7. Phân tích lỗi và cải tiến**      | 1.0  | 5 ví dụ dịch + đề xuất cải tiến           |
+| **8. Báo cáo**                        | 1.0  | Đầy đủ, rõ ràng, có format tốt            |
+| **Tổng điểm**                         | **10** | -                                        |
 
 ---
 
 **KẾT THÚC BÁO CÁO**
+
+---
+
+**Lưu ý:** Sau khi hoàn thành huấn luyện và đánh giá, nhớ cập nhật các kết quả thực tế vào các section còn đánh dấu [Sẽ được cập nhật] trong báo cáo này.

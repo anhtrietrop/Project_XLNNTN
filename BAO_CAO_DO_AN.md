@@ -86,6 +86,18 @@ Mô hình Neural Machine Translation (NMT) sử dụng kiến trúc Encoder-Deco
 | Gradient clipping       | 0.5     |
 | Early stopping patience | 3       |
 | Total parameters        | ~17.5M  |
+| Embedding dimension     | 384     |
+| Hidden size             | 512     |
+| Số layer LSTM           | 2       |
+| Dropout                 | 0.5     |
+| Teacher forcing ratio   | 0.5     |
+| Batch size              | 64      |
+| Learning rate           | 0.0005  |
+| Weight decay            | 1e-4    |
+| Label smoothing         | 0.1     |
+| Gradient clipping       | 0.5     |
+| Early stopping patience | 3       |
+| Total parameters        | 20,612,752 |
 
 ---
 
@@ -158,12 +170,12 @@ p(y_t) = softmax(Linear(ĥ_t))
 ```python
 N_EPOCHS = 20
 BATCH_SIZE = 64
-LEARNING_RATE = 0.001
-OPTIMIZER = Adam(lr=0.001, weight_decay=1e-5)
+LEARNING_RATE = 0.0005
+OPTIMIZER = Adam(lr=0.0005, weight_decay=1e-4)
 CRITERION = CrossEntropyLoss(ignore_index=pad_idx, label_smoothing=0.1)
-SCHEDULER = ReduceLROnPlateau(factor=0.5, patience=2)
+SCHEDULER = ReduceLROnPlateau(factor=0.5, patience=3)
 CLIP = 0.5
-TEACHER_FORCING_RATIO = 0.3
+TEACHER_FORCING_RATIO = 0.5
 EARLY_STOPPING_PATIENCE = 3
 SEED = 42  # Reproducibility
 ```
@@ -184,10 +196,10 @@ _Lưu ý: Biểu đồ và kết quả chi tiết sẽ được cập nhật sau
 _Sẽ được cập nhật sau khi train_
 
 ```
-Best Epoch: XX/20
-  Train Loss: X.XXX | Train PPL: XX.XX
-  Val Loss:   X.XXX | Val PPL:   XX.XX
-  Time per epoch: ~X.XX minutes
+Best model metrics (from run):
+    Total epochs trained: 19
+    Best validation loss: 4.070
+    Best validation PPL: 58.573
 ```
 
 ### 3.4. Thời gian huấn luyện
@@ -211,9 +223,9 @@ Best Epoch: XX/20
 
 _Sẽ được cập nhật sau khi đánh giá hoàn tất_
 
-**Mục tiêu:**
+**Kết quả thực tế (từ notebook):**
 
-- **Average BLEU Score:** 0.25-0.35 (25-35%)
+- **Average BLEU Score:** 0.2446 (24.46%)
 
 ### 4.3. Phân bố BLEU Score
 
@@ -236,7 +248,7 @@ _Sẽ được cập nhật sau khi đánh giá_
 
 | Mô hình            | BLEU Score | Số tham số |
 | ------------------ | ---------- | ---------- |
-| LSTM (Đồ án này)   | 25-35%     | ~17.5M     |
+| LSTM (Đồ án này)   | 24.46%     | 20,612,752 |
 | LSTM + Attention   | 32-38%     | ~20M       |
 | Transformer (base) | 38-42%     | ~65M       |
 | GPT-4              | >50%       | ~1.7T      |

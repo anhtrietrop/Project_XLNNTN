@@ -72,31 +72,21 @@ Mô hình Neural Machine Translation (NMT) sử dụng kiến trúc Encoder-Deco
 
 ### 1.4. Tham số mô hình chính
 
-| Tham số                 | Giá trị |
-| ----------------------- | ------- |
-| Embedding dimension     | 256     |
-| Hidden size             | 384     |
-| Số layer LSTM           | 2       |
-| Dropout                 | 0.6     |
-| Teacher forcing ratio   | 0.3     |
-| Batch size              | 64      |
-| Learning rate           | 0.001   |
-| Weight decay            | 1e-5    |
-| Label smoothing         | 0.1     |
-| Gradient clipping       | 0.5     |
-| Early stopping patience | 3       |
-| Total parameters        | ~17.5M  |
-| Embedding dimension     | 384     |
-| Hidden size             | 512     |
-| Số layer LSTM           | 2       |
-| Dropout                 | 0.5     |
-| Teacher forcing ratio   | 0.5     |
-| Batch size              | 64      |
-| Learning rate           | 0.0005  |
-| Weight decay            | 1e-4    |
-| Label smoothing         | 0.1     |
-| Gradient clipping       | 0.5     |
-| Early stopping patience | 3       |
+| Tham số                 | Giá trị    |
+| ----------------------- | ---------- |
+| Input vocab (EN)        | 9,797      |
+| Output vocab (FR)       | 10,000     |
+| Embedding dimension     | 384        |
+| Hidden size             | 512        |
+| Số layer LSTM           | 2          |
+| Dropout                 | 0.5        |
+| Teacher forcing ratio   | 0.5        |
+| Batch size              | 64         |
+| Learning rate           | 0.0005     |
+| Weight decay            | 1e-4       |
+| Label smoothing         | 0.1        |
+| Gradient clipping       | 0.5        |
+| Early stopping patience | 3          |
 | Total parameters        | 20,612,752 |
 
 ---
@@ -115,9 +105,9 @@ Input (English) → Encoder → Context Vector → Decoder → Output (French)
 
 **Cấu trúc:**
 
-- **Embedding Layer:** 10,000 từ → 256 chiều
-- **Dropout:** p = 0.6 (giảm overfitting)
-- **LSTM:** 2 layers, hidden_size = 384
+- **Embedding Layer:** 9,797 từ (EN) → 384 chiều
+- **Dropout:** p = 0.5 (giảm overfitting)
+- **LSTM:** 2 layers, hidden_size = 512
 - **Packing:** pack_padded_sequence() để xử lý câu có độ dài khác nhau
 
 **Công thức LSTM:**
@@ -126,9 +116,9 @@ Input (English) → Encoder → Context Vector → Decoder → Output (French)
 (h_t, c_t) = LSTM(embed(x_t), (h_{t-1}, c_{t-1}))
 ```
 
-**Input:** `[src_len, batch, 256]`  
-**Output:** `[src_len, batch, 384]`  
-**Context Vector:** `(h_n, c_n)` với shape `[2, batch, 384]` - Bottleneck chứa toàn bộ thông tin câu nguồn
+**Input:** `[src_len, batch, 384]`  
+**Output:** `[src_len, batch, 512]`  
+**Context Vector:** `(h_n, c_n)` với shape `[2, batch, 512]` - Bottleneck chứa toàn bộ thông tin câu nguồn
 
 ### 2.3. Decoder
 
@@ -138,12 +128,12 @@ Input (English) → Encoder → Context Vector → Decoder → Output (French)
 
 - **Initial State:** Nhận `(h_n, c_n)` từ Encoder
 - **Input:** Bắt đầu bằng token `<sos>`
-- **Embedding Layer:** 10,000 từ → 256 chiều
-- **Dropout:** p = 0.6
-- **LSTM:** 2 layers, hidden_size = 384
-- **Linear Layer:** 384 → 10,000 (vocabulary size)
+- **Embedding Layer:** 10,000 từ (FR) → 384 chiều
+- **Dropout:** p = 0.5
+- **LSTM:** 2 layers, hidden_size = 512
+- **Linear Layer:** 512 → 10,000 (vocabulary size)
 - **Softmax:** Tính xác suất từ vựng đầu ra
-- **Teacher Forcing:** Tỷ lệ 0.3 (sử dụng ground truth 30% thời gian)
+- **Teacher Forcing:** Tỷ lệ 0.5 (sử dụng ground truth 50% thời gian)
 
 **Công thức:**
 
@@ -154,10 +144,10 @@ p(y_t) = softmax(Linear(ĥ_t))
 
 ### 2.4. Kỹ thuật chống overfitting
 
-1. **Dropout cao (0.6):** Giảm phụ thuộc vào neuron cụ thể
+1. **Dropout (0.5):** Giảm phụ thuộc vào neuron cụ thể
 2. **Label Smoothing (0.1):** Làm mềm one-hot targets để giảm overconfidence
-3. **Weight Decay (1e-5):** L2 regularization cho trọng số
-4. **Teacher Forcing thấp (0.3):** Giảm exposure bias
+3. **Weight Decay (1e-4):** L2 regularization cho trọng số
+4. **Teacher Forcing (0.5):** Cân bằng giữa học ground truth và exposure bias
 5. **Gradient Clipping (0.5):** Tránh exploding gradients
 6. **Early Stopping (patience=3):** Dừng khi validation loss không giảm trong 3 epochs
 
@@ -180,33 +170,101 @@ EARLY_STOPPING_PATIENCE = 3
 SEED = 42  # Reproducibility
 ```
 
-### 3.2. Biểu đồ Training/Validation Loss
+### 3.2. Kết quả Training/Validation Loss
 
-_Lưu ý: Biểu đồ và kết quả chi tiết sẽ được cập nhật sau khi hoàn tất huấn luyện_
+![Training and Validation Loss](training_validation_loss.png)
 
-**Mô tả dự kiến:**
+**Phân tích biểu đồ:**
 
-- **Train Loss:** Giảm dần từ ~4.5 xuống ~2.0-2.5
-- **Val Loss:** Giảm từ ~4.0 xuống ~2.5-3.0
-- **Gap train-val:** ~0.5 (chấp nhận được với các kỹ thuật anti-overfitting)
-- **Nhận xét:** Loss giảm đều trong 10 epoch đầu. Từ epoch 10-15, Val loss bắt đầu ổn định hoặc tăng nhẹ. Early stopping kích hoạt khi val loss không giảm trong 3 epochs liên tiếp.
+**1. Training and Validation Loss (biểu đồ trái):**
 
-### 3.3. Kết quả tốt nhất
+- **Train Loss (đường xanh):** Giảm mượt mà và ổn định từ 5.557 → 3.491
+  - Giai đoạn 1-6: Giảm rất nhanh (~5.5 → 4.0) - model học các pattern cơ bản
+  - Giai đoạn 7-14: Giảm ổn định (~4.0 → 3.5) - tinh chỉnh weights
+  - Giai đoạn 15-19: Giảm chậm (~3.55 → 3.49) - approaching convergence
+- **Val Loss (đường đỏ):** Giảm từ 5.384 → 4.070 rồi plateau
 
-_Sẽ được cập nhật sau khi train_
+  - Giai đoạn 1-12: Giảm tốt song song với train loss (~5.4 → 4.2)
+  - Giai đoạn 13-16: Tiếp tục giảm nhẹ, đạt minimum 4.070 tại epoch 16
+  - Giai đoạn 17-19: Dao động xung quanh 4.09-4.11 → early stopping trigger
+
+- **Gap (Val - Train):** Tăng dần từ -0.173 (epoch 1) → 0.604 (epoch 19)
+  - Gap < 0.7 cho thấy regularization techniques hiệu quả
+  - Không có dấu hiệu overfitting nghiêm trọng
+
+**2. Training and Validation Perplexity (biểu đồ phải):**
+
+- **Train PPL (đường xanh):** Giảm từ 259.045 → 32.805
+
+  - Cải thiện ~8 lần về khả năng dự đoán từ tiếp theo
+  - Đường cong mượt, không có dao động bất thường
+
+- **Val PPL (đường đỏ):** Giảm từ 217.970 → 58.573 (best at epoch 16)
+  - Cải thiện ~3.7 lần, ít hơn train PPL → mô hình vẫn generalize được
+  - Từ epoch 12 trở đi gần như flatten → model đã đạt capacity limit
+
+**3. Quan sát quan trọng:**
+
+- ✅ **Không overfit:** Gap ổn định ~0.5-0.6, val loss không tăng đột ngột
+- ✅ **Convergence:** Val loss plateau từ epoch 16, không giảm thêm được
+- ✅ **Early stopping hiệu quả:** Dừng đúng lúc tại epoch 19 (3 epochs không cải thiện)
+- ⚠️ **Model capacity limit:** Val PPL flatten sớm hơn train PPL → cần architecture phức tạp hơn (Attention) để cải thiện
+
+**Tiến trình huấn luyện thực tế (19 epochs):**
+
+| Epoch | Train Loss | Train PPL | Val Loss | Val PPL | Gap    | Note          |
+| ----- | ---------- | --------- | -------- | ------- | ------ | ------------- |
+| 1     | 5.557      | 259.045   | 5.384    | 217.970 | -0.173 | ✓ Best saved  |
+| 2     | 4.833      | 125.574   | 5.024    | 152.021 | 0.191  | ✓ Best saved  |
+| 3     | 4.486      | 88.738    | 4.855    | 128.387 | 0.369  | ✓ Best saved  |
+| 4     | 4.270      | 71.512    | 4.689    | 108.703 | 0.419  | ✓ Best saved  |
+| 5     | 4.117      | 61.388    | 4.565    | 96.021  | 0.447  | ✓ Best saved  |
+| 6     | 4.016      | 55.467    | 4.530    | 92.729  | 0.514  | ✓ Best saved  |
+| 7     | 3.914      | 50.074    | 4.501    | 90.070  | 0.587  | ✓ Best saved  |
+| 8     | 3.840      | 46.536    | 4.432    | 84.063  | 0.591  | ✓ Best saved  |
+| 9     | 3.772      | 43.469    | 4.374    | 79.337  | 0.602  | ✓ Best saved  |
+| 10    | 3.729      | 41.619    | 4.340    | 76.671  | 0.611  | ✓ Best saved  |
+| 11    | 3.670      | 39.243    | 4.281    | 72.299  | 0.611  | ✓ Best saved  |
+| 12    | 3.648      | 38.392    | 4.207    | 67.177  | 0.559  | ✓ Best saved  |
+| 13    | 3.607      | 36.852    | 4.179    | 65.296  | 0.572  | ✓ Best saved  |
+| 14    | 3.561      | 35.210    | 4.168    | 64.590  | 0.607  | ✓ Best saved  |
+| 15    | 3.549      | 34.761    | 4.172    | 64.849  | 0.624  | Patience: 1/3 |
+| 16    | 3.529      | 34.077    | 4.070    | 58.573  | 0.542  | ✓ Best saved  |
+| 17    | 3.512      | 33.532    | 4.115    | 61.236  | 0.602  | Patience: 1/3 |
+| 18    | 3.503      | 33.205    | 4.103    | 60.502  | 0.600  | Patience: 2/3 |
+| 19    | 3.491      | 32.805    | 4.094    | 59.995  | 0.604  | Patience: 3/3 |
+
+**Phân tích:**
+
+- **Train Loss:** Giảm ổn định từ 5.557 (epoch 1) xuống 3.491 (epoch 19)
+- **Val Loss:** Đạt minimum 4.070 tại epoch 16, sau đó tăng nhẹ
+- **Gap:** Dao động 0.542-0.624 (chấp nhận được, không overfit nghiêm trọng)
+- **Early Stopping:** Kích hoạt tại epoch 19 vì val loss không giảm trong 3 epochs liên tiếp
+- **Perplexity:** Val PPL giảm từ 217.970 xuống 58.573 (cải thiện đáng kể)
+
+### 3.3. Kết quả mô hình tốt nhất
 
 ```
-Best model metrics (from run):
+✓ Best model saved at Epoch 16:
     Total epochs trained: 19
     Best validation loss: 4.070
     Best validation PPL: 58.573
+    Gap (Val - Train): 0.542
+    Train loss at best epoch: 3.529
+    Train PPL at best epoch: 34.077
 ```
+
+**Đánh giá:**
+
+- Gap < 1.0 chứng tỏ các kỹ thuật anti-overfitting (dropout 0.5, weight decay 1e-4, label smoothing) hoạt động hiệu quả
+- Model dừng đúng lúc trước khi overfitting trầm trọng (early stopping patience=3)
+- Val PPL 58.573 cho thấy model có khả năng dự đoán từ tiếp theo tương đối tốt
 
 ### 3.4. Thời gian huấn luyện
 
-- **Mỗi epoch:** ~3-5 phút (RTX 3050 Laptop - 4GB VRAM)
-- **Tổng thời gian:** ~60-100 phút (cho 15-20 epochs)
-- **Model size:** ~70 MB
+- **Mỗi epoch:** ~1.5 phút (RTX 3050 Laptop - 4GB VRAM)
+- **Tổng thời gian:** ~28-30 phút (cho 19 epochs)
+- **Model size:** ~80 MB
 
 ---
 
@@ -221,28 +279,27 @@ Best model metrics (from run):
 
 ### 4.2. Kết quả BLEU Score trung bình
 
-_Sẽ được cập nhật sau khi đánh giá hoàn tất_
-
-**Kết quả thực tế (từ notebook):**
+**Kết quả trên 1,000 cặp câu test:**
 
 - **Average BLEU Score:** 0.2446 (24.46%)
+- **Phương pháp:** Greedy decoding với max_length=50
+- **Tokenization:** spaCy (en_core_web_sm + fr_core_news_sm)
+- **Smoothing:** NLTK SmoothingFunction.method1
 
 ### 4.3. Phân bố BLEU Score
 
-_Sẽ được cập nhật sau khi đánh giá_
+**Kết quả thực tế trên 1,000 cặp câu test:**
 
-**Phân loại dự kiến:**
-
-- **Excellent (≥ 0.5):** XXX câu (XX%)
-- **Good (0.3-0.5):** XXX câu (XX%)
-- **Fair (0.1-0.3):** XXX câu (XX%)
-- **Poor (< 0.1):** XXX câu (XX%)
+- **Excellent (≥ 0.5):** 133 câu (13.3%)
+- **Good (0.3-0.5):** 192 câu (19.2%)
+- **Fair (0.1-0.3):** 321 câu (32.1%)
+- **Poor (< 0.1):** 354 câu (35.4%)
 
 **Đánh giá:**
 
-- ~40-45% đạt mức Khá/Tốt
-- ~40% ở mức Trung bình
-- ~15-20% dịch kém
+- 32.5% đạt mức Khá/Tốt (BLEU ≥ 0.3)
+- 32.1% ở mức Trung bình (BLEU 0.1-0.3)
+- 35.4% dịch kém (BLEU < 0.1)
 
 ### 4.4. So sánh với baseline
 
@@ -257,70 +314,70 @@ _Sẽ được cập nhật sau khi đánh giá_
 
 ## 5. VÍ DỤ DỊCH VÀ PHÂN TÍCH
 
-_Các ví dụ cụ thể sẽ được lấy từ notebook sau khi chạy cell dịch_
+**Phân tích 5 ví dụ thực tế từ test set (10 ví dụ đầu tiên):**
 
-### Ví dụ 1 (Tốt - BLEU > 0.5)
+### Ví dụ 1 (Xuất sắc - BLEU = 0.5311)
 
 ```
-Source:    A young girl climbing on a wooden structure.
-Reference: Une jeune fille grimpe sur une structure en bois.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
+Source:    A man in an orange hat starring at something.
+Reference: Un homme avec un chapeau orange regardant quelque chose.
+Predicted: un homme avec un chapeau orange quelque quelque chose quelque chose .
+BLEU:      0.5311
 ```
 
-**Nhận xét:** Dịch chính xác hoàn toàn về cả từ vựng và ngữ pháp.
+**Nhận xét:** Dịch đúng các từ khóa chính ("homme", "chapeau orange", "quelque chose"), tuy có lặp từ nhưng BLEU vẫn cao nhờ n-gram matching.
 
 ---
 
-### Ví dụ 2 (Khá - BLEU 0.3-0.5)
+### Ví dụ 2 (Khá - BLEU = 0.4082)
 
 ```
-Source:    Two dogs are playing in the snow.
-Reference: Deux chiens jouent dans la neige.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
+Source:    People walking down sidewalk next to a line of stores.
+Reference: Des gens marchant sur le trottoir à côté d'une rangée de magasins.
+Predicted: des gens marchant sur le trottoir près d' une d' une . .
+BLEU:      0.4082
 ```
 
-**Nhận xét:** Truyền đạt đúng ý chính, đúng từ khóa quan trọng.
+**Nhận xét:** Dịch đúng các từ khóa quan trọng ("gens marchant", "trottoir"), dùng "près" thay vì "à côté" (đồng nghĩa). Thiếu "rangée de magasins".
 
 ---
 
-### Ví dụ 3 (Trung bình - BLEU 0.1-0.3)
+### Ví dụ 3 (Trung bình - BLEU = 0.2954)
 
 ```
-Source:    A man in a blue shirt is standing on a ladder working on a house.
-Reference: Un homme en chemise bleue se tient sur une échelle et travaille sur une maison.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
+Source:    A young man skateboards off a pink railing.
+Reference: Un jeune homme fait du skateboard sur une rampe rose.
+Predicted: un jeune homme fait une une rampe en .
+BLEU:      0.2954
 ```
 
-**Nhận xét dự kiến:** Có thể dùng từ đồng nghĩa khác (vd: "se trouve" thay vì "se tient") hoặc cấu trúc khác (vd: "pour travailler" thay vì "et travaille").
+**Nhận xét:** Dịch đúng chủ ngữ và động từ chính, nhưng thiếu "skateboard" (OOV) và câu bị cắt ngắn.
 
 ---
 
-### Ví dụ 4 (Kém - BLEU < 0.1)
+### Ví dụ 4 (Kém - BLEU = 0.0969)
 
 ```
-Source:    A group of people are gathered around a table with food.
-Reference: Un groupe de personnes est rassemblé autour d'une table avec de la nourriture.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
+Source:    A man is throwing a log into a waterway while two dogs watch.
+Reference: Un homme lance un tronc dans un cours d'eau, tandis que deux chiens regardent.
+Predicted: un homme fait un un dans un champ tandis que deux autres regardent .
+BLEU:      0.0969
 ```
 
-**Nhận xét dự kiến:** Có thể thiếu động từ chính hoặc dùng từ informal thay vì formal.
+**Nhận xét:** Chỉ dịch đúng cấu trúc câu và mệnh đề phụ, nhưng mất hầu hết ý nghĩa chính (throwing → fait, log → thiếu, waterway → champ sai).
 
 ---
 
-### Ví dụ 5 (Sai - BLEU ≈ 0)
+### Ví dụ 5 (Rất kém - BLEU = 0.0437)
 
 ```
-Source:    The photographer is taking a picture of a beautiful sunset over the mountains.
-Reference: Le photographe prend une photo d'un magnifique coucher de soleil sur les montagnes.
-Predicted: [Sẽ được cập nhật sau khi chạy]
-BLEU:      [Sẽ được cập nhật]
+Source:    Several men dressed in orange gather for an outdoor social event.
+Reference: Plusieurs hommes habillés en orange se rassemblent dehors pour un événement social.
+Predicted: plusieurs hommes en costumes oranges sont un un d' un événement en plein air .
+BLEU:      0.0437
 ```
 
-**Nhận xét dự kiến:** Mất thông tin quan trọng (vd: "coucher de soleil"), sai ngữ pháp, hoặc lặp từ.
+**Nhận xét:** Dịch sai động từ chính (gather → sont), lặp từ nhiều, thiếu "se rassemblent", dùng "plein air" thay vì đơn giản "dehors".
 
 ---
 
@@ -331,7 +388,7 @@ BLEU:      [Sẽ được cập nhật]
 #### 1. Context Vector cố định (40% lỗi)
 
 - **Vấn đề:** Mất thông tin với câu dài > 15 từ
-- **Nguyên nhân:** Context vector 384 chiều không đủ chứa toàn bộ ngữ nghĩa câu dài
+- **Nguyên nhân:** Context vector 512 chiều vẫn chưa đủ chứa toàn bộ ngữ nghĩa câu dài phức tạp
 - **Ví dụ:** Câu 20 từ với nhiều chi tiết → chỉ nhớ được các chi tiết cuối
 
 #### 2. Out-of-Vocabulary (OOV) (25% lỗi)
@@ -475,9 +532,9 @@ h_t = [h_t^forward; h_t^backward]
 
 | Tiêu chí      | LSTM (Đồ án) | LSTM + Attention | Transformer |
 | ------------- | ------------ | ---------------- | ----------- |
-| BLEU Score    | 25-35%       | 32-38%           | 38-42%      |
-| Số tham số    | ~17.5M       | ~20M             | ~65M        |
-| Training time | 1-2h         | 2-3h             | 4-6h        |
+| BLEU Score    | 24.46%       | 32-38%           | 38-42%      |
+| Số tham số    | 20,612,752   | ~22M             | ~65M        |
+| Training time | ~30 phút     | 2-3h             | 4-6h        |
 | VRAM          | 4GB          | 6GB              | 8GB+        |
 | Độ phức tạp   | Đơn giản     | Trung bình       | Cao         |
 | Xử lý câu dài | ❌           | ✅               | ✅          |
@@ -568,30 +625,30 @@ Mô hình Encoder-Decoder LSTM là **baseline vững chắc** để nghiên cứ
 
 ```python
 # ==================== Vocabulary ====================
-INPUT_DIM = 10000      # English vocab size
+INPUT_DIM = 9797       # English vocab size (actual from training)
 OUTPUT_DIM = 10000     # French vocab size
 MAX_VOCAB_SIZE = 10000
 MIN_FREQ = 2           # Minimum word frequency
 
 # ==================== Model Architecture ====================
-EMB_DIM = 256          # Embedding dimension
-HIDDEN_DIM = 384       # Hidden size (giảm từ 512 để tránh overfitting)
+EMB_DIM = 384          # Embedding dimension (optimized for BLEU 27-28%)
+HIDDEN_DIM = 512       # Hidden size (optimized for performance)
 N_LAYERS = 2           # Number of LSTM layers
-DROPOUT = 0.6          # Dropout rate (tăng từ 0.5 để giảm overfitting)
+DROPOUT = 0.5          # Dropout rate (balanced regularization)
 
 # ==================== Training ====================
 N_EPOCHS = 20
 BATCH_SIZE = 64
-LEARNING_RATE = 0.001
-WEIGHT_DECAY = 1e-5    # L2 regularization
-LABEL_SMOOTHING = 0.1  # Label smoothing (giảm overconfidence)
-CLIP = 0.5             # Gradient clipping (giảm từ 1.0)
-TEACHER_FORCING_RATIO = 0.3  # Teacher forcing ratio (giảm từ 0.5)
+LEARNING_RATE = 0.0005 # Learning rate (lower for stability)
+WEIGHT_DECAY = 1e-4    # L2 regularization (higher to reduce overfitting)
+LABEL_SMOOTHING = 0.1  # Label smoothing (reduce overconfidence)
+CLIP = 0.5             # Gradient clipping
+TEACHER_FORCING_RATIO = 0.5  # Teacher forcing ratio (balanced)
 
 # ==================== Regularization ====================
-EARLY_STOPPING_PATIENCE = 5    # Early stopping patience (giảm từ 10)
+EARLY_STOPPING_PATIENCE = 3    # Early stopping patience (stopped at epoch 19)
 SCHEDULER_FACTOR = 0.5         # LR reduction factor
-SCHEDULER_PATIENCE = 2         # LR scheduler patience
+SCHEDULER_PATIENCE = 3         # LR scheduler patience
 
 # ==================== Reproducibility ====================
 SEED = 42
@@ -615,7 +672,417 @@ SPECIAL_TOKENS = {
 }
 ```
 
-### B. Công thức toán học chi tiết
+### B. Implementation Code quan trọng
+
+#### B.1. Encoder Class
+
+```python
+class Encoder(nn.Module):
+    """
+    Encoder LSTM - Mã hóa câu nguồn thành context vector
+    
+    Công thức: (h_t, c_t) = LSTM(embed(x_t), (h_{t-1}, c_{t-1}))
+    """
+    
+    def __init__(self, input_dim, emb_dim, hidden_dim, n_layers, dropout):
+        super(Encoder, self).__init__()
+        
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+        
+        # Embedding layer: vocab_size → emb_dim
+        self.embedding = nn.Embedding(input_dim, emb_dim)
+        
+        # LSTM layer với dropout
+        self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers, 
+                           dropout=dropout if n_layers > 1 else 0,
+                           batch_first=False)
+        
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, src, src_lengths):
+        """
+        Args:
+            src: [src_len, batch_size] - Câu nguồn đã tokenize
+            src_lengths: [batch_size] - Độ dài thực của mỗi câu
+            
+        Returns:
+            outputs: [src_len, batch_size, hidden_dim] - Tất cả hidden states
+            hidden: [n_layers, batch_size, hidden_dim] - Context vector
+            cell: [n_layers, batch_size, hidden_dim] - Cell state
+        """
+        # Embedding + Dropout: [src_len, batch, emb_dim]
+        embedded = self.dropout(self.embedding(src))
+        
+        # Pack padded sequence (xử lý câu độ dài khác nhau)
+        packed_embedded = pack_padded_sequence(embedded, src_lengths.cpu(), 
+                                              enforce_sorted=True)
+        
+        # LSTM forward
+        packed_outputs, (hidden, cell) = self.lstm(packed_embedded)
+        
+        # Unpack sequence
+        outputs, _ = pad_packed_sequence(packed_outputs)
+        
+        return outputs, hidden, cell
+```
+
+**Giải thích:**
+- `pack_padded_sequence`: Bỏ qua padding tokens khi tính toán → hiệu quả hơn
+- Context vector `(hidden, cell)` chứa toàn bộ thông tin câu nguồn
+- Dropout áp dụng cho embedding layer để giảm overfitting
+
+#### B.2. Decoder Class
+
+```python
+class Decoder(nn.Module):
+    """
+    Decoder LSTM - Giải mã context vector thành câu đích
+    
+    Công thức: 
+    - (ĥ_t, ĉ_t) = LSTM(embed(y_{t-1}), (ĥ_{t-1}, ĉ_{t-1}))
+    - p(y_t) = softmax(Linear(ĥ_t))
+    """
+    
+    def __init__(self, output_dim, emb_dim, hidden_dim, n_layers, dropout):
+        super(Decoder, self).__init__()
+        
+        self.output_dim = output_dim
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+        
+        # Embedding layer
+        self.embedding = nn.Embedding(output_dim, emb_dim)
+        
+        # LSTM layer
+        self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers,
+                           dropout=dropout if n_layers > 1 else 0,
+                           batch_first=False)
+        
+        # Output layer: hidden_dim → vocab_size
+        self.fc_out = nn.Linear(hidden_dim, output_dim)
+        
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, input, hidden, cell):
+        """
+        Args:
+            input: [batch_size] - Token trước đó (hoặc <sos>)
+            hidden: [n_layers, batch_size, hidden_dim] - Hidden state
+            cell: [n_layers, batch_size, hidden_dim] - Cell state
+            
+        Returns:
+            prediction: [batch_size, output_dim] - Xác suất từng token
+            hidden: [n_layers, batch_size, hidden_dim] - Updated hidden
+            cell: [n_layers, batch_size, hidden_dim] - Updated cell
+        """
+        # Unsqueeze để decode từng bước: [batch] → [1, batch]
+        input = input.unsqueeze(0)
+        
+        # Embedding + Dropout: [1, batch, emb_dim]
+        embedded = self.dropout(self.embedding(input))
+        
+        # LSTM step: [1, batch, emb_dim] → [1, batch, hidden_dim]
+        output, (hidden, cell) = self.lstm(embedded, (hidden, cell))
+        
+        # Linear layer: [1, batch, hidden] → [batch, vocab_size]
+        prediction = self.fc_out(output.squeeze(0))
+        
+        return prediction, hidden, cell
+```
+
+**Giải thích:**
+- Decode từng token một (autoregressive)
+- `fc_out` chuyển hidden state thành phân phối xác suất trên vocabulary
+- Không dùng softmax vì CrossEntropyLoss đã tích hợp sẵn
+
+#### B.3. Seq2Seq Model
+
+```python
+class Seq2Seq(nn.Module):
+    """
+    Kết hợp Encoder-Decoder với Teacher Forcing
+    """
+    
+    def __init__(self, encoder, decoder, device):
+        super(Seq2Seq, self).__init__()
+        
+        self.encoder = encoder
+        self.decoder = decoder
+        self.device = device
+        
+    def forward(self, src, src_lengths, tgt, teacher_forcing_ratio=0.5):
+        """
+        Args:
+            src: [src_len, batch_size] - Câu nguồn
+            src_lengths: [batch_size] - Độ dài câu nguồn
+            tgt: [tgt_len, batch_size] - Câu đích (ground truth)
+            teacher_forcing_ratio: Tỷ lệ dùng ground truth (0.5 = 50%)
+            
+        Returns:
+            outputs: [tgt_len, batch_size, output_dim] - Predictions
+        """
+        batch_size = tgt.shape[1]
+        tgt_len = tgt.shape[0]
+        tgt_vocab_size = self.decoder.output_dim
+        
+        # Khởi tạo tensor lưu outputs
+        outputs = torch.zeros(tgt_len, batch_size, tgt_vocab_size).to(self.device)
+        
+        # Encoder: src → context vector (hidden, cell)
+        _, hidden, cell = self.encoder(src, src_lengths)
+        
+        # Decoder bắt đầu với <sos> token
+        input = tgt[0, :]  # [batch_size]
+        
+        # Decode từng bước (t=1 vì t=0 là <sos>)
+        for t in range(1, tgt_len):
+            # Dự đoán token tiếp theo
+            output, hidden, cell = self.decoder(input, hidden, cell)
+            outputs[t] = output
+            
+            # Teacher forcing: 50% dùng ground truth, 50% dùng prediction
+            teacher_force = random.random() < teacher_forcing_ratio
+            top1 = output.argmax(1)  # Token có xác suất cao nhất
+            input = tgt[t] if teacher_force else top1
+        
+        return outputs
+```
+
+**Giải thích Teacher Forcing:**
+- `teacher_forcing_ratio = 0.5`: 50% thời gian dùng ground truth, 50% dùng prediction
+- Giúp model học nhanh hơn nhưng vẫn giảm exposure bias
+- Tỷ lệ thấp (0.3) → model tự lực hơn nhưng học chậm
+- Tỷ lệ cao (0.7) → học nhanh nhưng dễ bị exposure bias
+
+#### B.4. Training Loop với 6 kỹ thuật chống Overfitting
+
+```python
+def train(model, iterator, optimizer, criterion, clip, teacher_forcing_ratio):
+    """
+    Training loop với 6 kỹ thuật anti-overfitting:
+    1. Dropout (0.5)
+    2. Label smoothing (0.1)
+    3. Weight decay (1e-4)
+    4. Teacher forcing (0.5)
+    5. Gradient clipping (0.5)
+    6. Early stopping (patience=3)
+    """
+    model.train()
+    epoch_loss = 0
+    
+    for i, (src, src_len, tgt, tgt_len) in enumerate(iterator):
+        src, tgt = src.to(device), tgt.to(device)
+        
+        optimizer.zero_grad()
+        
+        # Forward pass
+        output = model(src, src_len, tgt, teacher_forcing_ratio)
+        
+        # Reshape cho loss calculation
+        output_dim = output.shape[-1]
+        output = output[1:].view(-1, output_dim)  # Bỏ <sos>
+        tgt = tgt[1:].view(-1)  # Bỏ <sos>
+        
+        # Calculate loss (với label smoothing)
+        loss = criterion(output, tgt)
+        
+        # Backward pass
+        loss.backward()
+        
+        # Gradient clipping (tránh exploding gradients)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        
+        optimizer.step()
+        
+        epoch_loss += loss.item()
+    
+    return epoch_loss / len(iterator)
+
+def evaluate(model, iterator, criterion):
+    """
+    Evaluation loop (không có dropout)
+    """
+    model.eval()
+    epoch_loss = 0
+    
+    with torch.no_grad():
+        for i, (src, src_len, tgt, tgt_len) in enumerate(iterator):
+            src, tgt = src.to(device), tgt.to(device)
+            
+            # Forward pass (teacher_forcing_ratio=0 khi eval)
+            output = model(src, src_len, tgt, 0)
+            
+            output_dim = output.shape[-1]
+            output = output[1:].view(-1, output_dim)
+            tgt = tgt[1:].view(-1)
+            
+            loss = criterion(output, tgt)
+            epoch_loss += loss.item()
+    
+    return epoch_loss / len(iterator)
+
+# Main training loop với early stopping
+N_EPOCHS = 20
+CLIP = 0.5
+TEACHER_FORCING_RATIO = 0.5
+PATIENCE = 3
+
+best_valid_loss = float('inf')
+patience_counter = 0
+
+for epoch in range(N_EPOCHS):
+    train_loss = train(model, train_loader, optimizer, criterion, 
+                      CLIP, TEACHER_FORCING_RATIO)
+    valid_loss = evaluate(model, val_loader, criterion)
+    
+    # Learning rate scheduling
+    scheduler.step(valid_loss)
+    
+    # Early stopping
+    if valid_loss < best_valid_loss:
+        best_valid_loss = valid_loss
+        patience_counter = 0
+        torch.save(model.state_dict(), 'best_model.pth')
+    else:
+        patience_counter += 1
+        if patience_counter >= PATIENCE:
+            print(f"Early stopping at epoch {epoch+1}")
+            break
+```
+
+**6 kỹ thuật anti-overfitting:**
+1. **Dropout (0.5):** Random tắt 50% neurons mỗi forward pass
+2. **Label smoothing (0.1):** Làm mềm one-hot targets, giảm overconfidence
+3. **Weight decay (1e-4):** L2 regularization trên weights
+4. **Teacher forcing (0.5):** Cân bằng giữa học nhanh và exposure bias
+5. **Gradient clipping (0.5):** Tránh exploding gradients
+6. **Early stopping (patience=3):** Dừng khi val loss không cải thiện
+
+#### B.5. Translate Function (Greedy Decoding)
+
+```python
+def translate_sentence(model, sentence, src_vocab, tgt_vocab, 
+                       tokenize_fn, max_len=50, device='cuda'):
+    """
+    Dịch một câu từ tiếng Anh sang tiếng Pháp
+    
+    Args:
+        sentence: str - Câu tiếng Anh
+        max_len: int - Độ dài tối đa câu dịch
+        
+    Returns:
+        translation: str - Câu tiếng Pháp
+    """
+    model.eval()
+    
+    # Tokenize + numericalize
+    tokens = tokenize_fn(sentence.lower())
+    tokens = [src_vocab.sos_idx] + \
+             [src_vocab.word2idx.get(t, src_vocab.unk_idx) for t in tokens] + \
+             [src_vocab.eos_idx]
+    
+    src_tensor = torch.LongTensor(tokens).unsqueeze(1).to(device)  # [src_len, 1]
+    src_len = torch.LongTensor([len(tokens)])
+    
+    with torch.no_grad():
+        # Encoder
+        _, hidden, cell = model.encoder(src_tensor, src_len)
+        
+        # Decoder: bắt đầu với <sos>
+        tgt_indexes = [tgt_vocab.sos_idx]
+        
+        for i in range(max_len):
+            tgt_tensor = torch.LongTensor([tgt_indexes[-1]]).to(device)
+            
+            # Decode một bước
+            output, hidden, cell = model.decoder(tgt_tensor, hidden, cell)
+            
+            # Greedy decoding: chọn token có xác suất cao nhất
+            pred_token = output.argmax(1).item()
+            tgt_indexes.append(pred_token)
+            
+            # Dừng khi gặp <eos>
+            if pred_token == tgt_vocab.eos_idx:
+                break
+    
+    # Convert indexes → words
+    tgt_tokens = [tgt_vocab.idx2word[i] for i in tgt_indexes]
+    
+    # Remove <sos>, <eos>
+    translation = ' '.join(tgt_tokens[1:-1])
+    
+    return translation
+```
+
+**Greedy Decoding:**
+- Mỗi bước chọn token có xác suất cao nhất: `argmax(p(y_t))`
+- **Ưu điểm:** Nhanh, đơn giản
+- **Nhược điểm:** Không tối ưu toàn cục (có thể bỏ lỡ câu tốt hơn)
+- **Cải thiện:** Dùng Beam Search (k=5 hoặc 10) để explore nhiều đường đi
+
+#### B.6. BLEU Score Calculation
+
+```python
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+
+def calculate_bleu(model, data, src_vocab, tgt_vocab, 
+                   tokenize_src, tokenize_tgt, device='cuda'):
+    """
+    Tính BLEU score trên test set
+    
+    BLEU = BP × exp(Σ w_n × log(p_n))
+    """
+    bleu_scores = []
+    smooth = SmoothingFunction()
+    
+    model.eval()
+    
+    for src_sentence, tgt_sentence in tqdm(data):
+        # Translate
+        pred = translate_sentence(model, src_sentence, src_vocab, tgt_vocab,
+                                 tokenize_src, device=device)
+        
+        # Tokenize reference (QUAN TRỌNG: phải dùng spaCy, không dùng .split())
+        reference = tokenize_tgt(tgt_sentence.lower())
+        candidate = tokenize_tgt(pred.lower())
+        
+        # Calculate BLEU (1-gram đến 4-gram)
+        score = sentence_bleu([reference], candidate, 
+                             weights=(0.25, 0.25, 0.25, 0.25),
+                             smoothing_function=smooth.method1)
+        
+        bleu_scores.append(score)
+    
+    return np.mean(bleu_scores), bleu_scores
+
+# Sử dụng
+avg_bleu, all_scores = calculate_bleu(model, test_data, en_vocab, fr_vocab,
+                                     tokenize_en, tokenize_fr, device)
+
+print(f"Average BLEU Score: {avg_bleu:.4f} ({avg_bleu*100:.2f}%)")
+
+# Phân loại BLEU
+excellent = sum(1 for s in all_scores if s >= 0.5)  # ≥50%
+good = sum(1 for s in all_scores if 0.3 <= s < 0.5)  # 30-50%
+fair = sum(1 for s in all_scores if 0.1 <= s < 0.3)  # 10-30%
+poor = sum(1 for s in all_scores if s < 0.1)         # <10%
+
+print(f"Excellent (≥0.5): {excellent} ({excellent/len(all_scores)*100:.1f}%)")
+print(f"Good (0.3-0.5):   {good} ({good/len(all_scores)*100:.1f}%)")
+print(f"Fair (0.1-0.3):   {fair} ({fair/len(all_scores)*100:.1f}%)")
+print(f"Poor (<0.1):      {poor} ({poor/len(all_scores)*100:.1f}%)")
+```
+
+**Lưu ý quan trọng:**
+- ⚠️ **PHẢI dùng spaCy tokenizer**, KHÔNG dùng `.split()`
+- Tokenization khác nhau → BLEU score sai lệch lớn
+- Ví dụ: "l'homme" → spaCy: ["l'", "homme"], split(): ["l'homme"]
+- `smoothing_function.method1`: Tránh BLEU=0 khi không match 4-gram
+
+---
+
+### C. Công thức toán học chi tiết
 
 #### 1. LSTM Cell (Encoder & Decoder)
 
@@ -638,12 +1105,12 @@ Trong đó:
 #### 2. Encoder Forward Pass
 
 ```
-x_t = Embedding(word_t)                # [batch, emb_dim]
-x_t = Dropout(x_t, p=0.6)
+x_t = Embedding(word_t)                # [batch, 384]
+x_t = Dropout(x_t, p=0.5)
 (h_t, c_t) = LSTM(x_t, (h_{t-1}, c_{t-1}))
 
 # Context vector (cuối cùng)
-context = (h_n, c_n)                   # [n_layers, batch, hidden_dim]
+context = (h_n, c_n)                   # [2, batch, 512]
 ```
 
 #### 3. Decoder Forward Pass
@@ -653,8 +1120,8 @@ context = (h_n, c_n)                   # [n_layers, batch, hidden_dim]
 (h_0, c_0) = context_from_encoder
 
 # Each step
-y_{t-1} = Embedding(word_{t-1})        # Previous word
-y_{t-1} = Dropout(y_{t-1}, p=0.6)
+y_{t-1} = Embedding(word_{t-1})        # Previous word [batch, 384]
+y_{t-1} = Dropout(y_{t-1}, p=0.5)
 (ĥ_t, ĉ_t) = LSTM(y_{t-1}, (ĥ_{t-1}, ĉ_{t-1}))
 
 # Output prediction

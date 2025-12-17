@@ -680,32 +680,32 @@ SPECIAL_TOKENS = {
 class Encoder(nn.Module):
     """
     Encoder LSTM - Mã hóa câu nguồn thành context vector
-    
+
     Công thức: (h_t, c_t) = LSTM(embed(x_t), (h_{t-1}, c_{t-1}))
     """
-    
+
     def __init__(self, input_dim, emb_dim, hidden_dim, n_layers, dropout):
         super(Encoder, self).__init__()
-        
+
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-        
+
         # Embedding layer: vocab_size → emb_dim
         self.embedding = nn.Embedding(input_dim, emb_dim)
-        
+
         # LSTM layer với dropout
-        self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers, 
+        self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers,
                            dropout=dropout if n_layers > 1 else 0,
                            batch_first=False)
-        
+
         self.dropout = nn.Dropout(dropout)
-        
+
     def forward(self, src, src_lengths):
         """
         Args:
             src: [src_len, batch_size] - Câu nguồn đã tokenize
             src_lengths: [batch_size] - Độ dài thực của mỗi câu
-            
+
         Returns:
             outputs: [src_len, batch_size, hidden_dim] - Tất cả hidden states
             hidden: [n_layers, batch_size, hidden_dim] - Context vector
@@ -713,21 +713,22 @@ class Encoder(nn.Module):
         """
         # Embedding + Dropout: [src_len, batch, emb_dim]
         embedded = self.dropout(self.embedding(src))
-        
+
         # Pack padded sequence (xử lý câu độ dài khác nhau)
-        packed_embedded = pack_padded_sequence(embedded, src_lengths.cpu(), 
+        packed_embedded = pack_padded_sequence(embedded, src_lengths.cpu(),
                                               enforce_sorted=True)
-        
+
         # LSTM forward
         packed_outputs, (hidden, cell) = self.lstm(packed_embedded)
-        
+
         # Unpack sequence
         outputs, _ = pad_packed_sequence(packed_outputs)
-        
+
         return outputs, hidden, cell
 ```
 
 **Giải thích:**
+
 - `pack_padded_sequence`: Bỏ qua padding tokens khi tính toán → hiệu quả hơn
 - Context vector `(hidden, cell)` chứa toàn bộ thông tin câu nguồn
 - Dropout áp dụng cho embedding layer để giảm overfitting
@@ -738,39 +739,39 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     """
     Decoder LSTM - Giải mã context vector thành câu đích
-    
-    Công thức: 
+
+    Công thức:
     - (ĥ_t, ĉ_t) = LSTM(embed(y_{t-1}), (ĥ_{t-1}, ĉ_{t-1}))
     - p(y_t) = softmax(Linear(ĥ_t))
     """
-    
+
     def __init__(self, output_dim, emb_dim, hidden_dim, n_layers, dropout):
         super(Decoder, self).__init__()
-        
+
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-        
+
         # Embedding layer
         self.embedding = nn.Embedding(output_dim, emb_dim)
-        
+
         # LSTM layer
         self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers,
                            dropout=dropout if n_layers > 1 else 0,
                            batch_first=False)
-        
+
         # Output layer: hidden_dim → vocab_size
         self.fc_out = nn.Linear(hidden_dim, output_dim)
-        
+
         self.dropout = nn.Dropout(dropout)
-        
+
     def forward(self, input, hidden, cell):
         """
         Args:
             input: [batch_size] - Token trước đó (hoặc <sos>)
             hidden: [n_layers, batch_size, hidden_dim] - Hidden state
             cell: [n_layers, batch_size, hidden_dim] - Cell state
-            
+
         Returns:
             prediction: [batch_size, output_dim] - Xác suất từng token
             hidden: [n_layers, batch_size, hidden_dim] - Updated hidden
@@ -778,20 +779,21 @@ class Decoder(nn.Module):
         """
         # Unsqueeze để decode từng bước: [batch] → [1, batch]
         input = input.unsqueeze(0)
-        
+
         # Embedding + Dropout: [1, batch, emb_dim]
         embedded = self.dropout(self.embedding(input))
-        
+
         # LSTM step: [1, batch, emb_dim] → [1, batch, hidden_dim]
         output, (hidden, cell) = self.lstm(embedded, (hidden, cell))
-        
+
         # Linear layer: [1, batch, hidden] → [batch, vocab_size]
         prediction = self.fc_out(output.squeeze(0))
-        
+
         return prediction, hidden, cell
 ```
 
 **Giải thích:**
+
 - Decode từng token một (autoregressive)
 - `fc_out` chuyển hidden state thành phân phối xác suất trên vocabulary
 - Không dùng softmax vì CrossEntropyLoss đã tích hợp sẵn
@@ -803,14 +805,14 @@ class Seq2Seq(nn.Module):
     """
     Kết hợp Encoder-Decoder với Teacher Forcing
     """
-    
+
     def __init__(self, encoder, decoder, device):
         super(Seq2Seq, self).__init__()
-        
+
         self.encoder = encoder
         self.decoder = decoder
         self.device = device
-        
+
     def forward(self, src, src_lengths, tgt, teacher_forcing_ratio=0.5):
         """
         Args:
@@ -818,38 +820,39 @@ class Seq2Seq(nn.Module):
             src_lengths: [batch_size] - Độ dài câu nguồn
             tgt: [tgt_len, batch_size] - Câu đích (ground truth)
             teacher_forcing_ratio: Tỷ lệ dùng ground truth (0.5 = 50%)
-            
+
         Returns:
             outputs: [tgt_len, batch_size, output_dim] - Predictions
         """
         batch_size = tgt.shape[1]
         tgt_len = tgt.shape[0]
         tgt_vocab_size = self.decoder.output_dim
-        
+
         # Khởi tạo tensor lưu outputs
         outputs = torch.zeros(tgt_len, batch_size, tgt_vocab_size).to(self.device)
-        
+
         # Encoder: src → context vector (hidden, cell)
         _, hidden, cell = self.encoder(src, src_lengths)
-        
+
         # Decoder bắt đầu với <sos> token
         input = tgt[0, :]  # [batch_size]
-        
+
         # Decode từng bước (t=1 vì t=0 là <sos>)
         for t in range(1, tgt_len):
             # Dự đoán token tiếp theo
             output, hidden, cell = self.decoder(input, hidden, cell)
             outputs[t] = output
-            
+
             # Teacher forcing: 50% dùng ground truth, 50% dùng prediction
             teacher_force = random.random() < teacher_forcing_ratio
             top1 = output.argmax(1)  # Token có xác suất cao nhất
             input = tgt[t] if teacher_force else top1
-        
+
         return outputs
 ```
 
 **Giải thích Teacher Forcing:**
+
 - `teacher_forcing_ratio = 0.5`: 50% thời gian dùng ground truth, 50% dùng prediction
 - Giúp model học nhanh hơn nhưng vẫn giảm exposure bias
 - Tỷ lệ thấp (0.3) → model tự lực hơn nhưng học chậm
@@ -870,33 +873,33 @@ def train(model, iterator, optimizer, criterion, clip, teacher_forcing_ratio):
     """
     model.train()
     epoch_loss = 0
-    
+
     for i, (src, src_len, tgt, tgt_len) in enumerate(iterator):
         src, tgt = src.to(device), tgt.to(device)
-        
+
         optimizer.zero_grad()
-        
+
         # Forward pass
         output = model(src, src_len, tgt, teacher_forcing_ratio)
-        
+
         # Reshape cho loss calculation
         output_dim = output.shape[-1]
         output = output[1:].view(-1, output_dim)  # Bỏ <sos>
         tgt = tgt[1:].view(-1)  # Bỏ <sos>
-        
+
         # Calculate loss (với label smoothing)
         loss = criterion(output, tgt)
-        
+
         # Backward pass
         loss.backward()
-        
+
         # Gradient clipping (tránh exploding gradients)
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
-        
+
         optimizer.step()
-        
+
         epoch_loss += loss.item()
-    
+
     return epoch_loss / len(iterator)
 
 def evaluate(model, iterator, criterion):
@@ -905,21 +908,21 @@ def evaluate(model, iterator, criterion):
     """
     model.eval()
     epoch_loss = 0
-    
+
     with torch.no_grad():
         for i, (src, src_len, tgt, tgt_len) in enumerate(iterator):
             src, tgt = src.to(device), tgt.to(device)
-            
+
             # Forward pass (teacher_forcing_ratio=0 khi eval)
             output = model(src, src_len, tgt, 0)
-            
+
             output_dim = output.shape[-1]
             output = output[1:].view(-1, output_dim)
             tgt = tgt[1:].view(-1)
-            
+
             loss = criterion(output, tgt)
             epoch_loss += loss.item()
-    
+
     return epoch_loss / len(iterator)
 
 # Main training loop với early stopping
@@ -932,13 +935,13 @@ best_valid_loss = float('inf')
 patience_counter = 0
 
 for epoch in range(N_EPOCHS):
-    train_loss = train(model, train_loader, optimizer, criterion, 
+    train_loss = train(model, train_loader, optimizer, criterion,
                       CLIP, TEACHER_FORCING_RATIO)
     valid_loss = evaluate(model, val_loader, criterion)
-    
+
     # Learning rate scheduling
     scheduler.step(valid_loss)
-    
+
     # Early stopping
     if valid_loss < best_valid_loss:
         best_valid_loss = valid_loss
@@ -952,6 +955,7 @@ for epoch in range(N_EPOCHS):
 ```
 
 **6 kỹ thuật anti-overfitting:**
+
 1. **Dropout (0.5):** Random tắt 50% neurons mỗi forward pass
 2. **Label smoothing (0.1):** Làm mềm one-hot targets, giảm overconfidence
 3. **Weight decay (1e-4):** L2 regularization trên weights
@@ -962,60 +966,61 @@ for epoch in range(N_EPOCHS):
 #### B.5. Translate Function (Greedy Decoding)
 
 ```python
-def translate_sentence(model, sentence, src_vocab, tgt_vocab, 
+def translate_sentence(model, sentence, src_vocab, tgt_vocab,
                        tokenize_fn, max_len=50, device='cuda'):
     """
     Dịch một câu từ tiếng Anh sang tiếng Pháp
-    
+
     Args:
         sentence: str - Câu tiếng Anh
         max_len: int - Độ dài tối đa câu dịch
-        
+
     Returns:
         translation: str - Câu tiếng Pháp
     """
     model.eval()
-    
+
     # Tokenize + numericalize
     tokens = tokenize_fn(sentence.lower())
     tokens = [src_vocab.sos_idx] + \
              [src_vocab.word2idx.get(t, src_vocab.unk_idx) for t in tokens] + \
              [src_vocab.eos_idx]
-    
+
     src_tensor = torch.LongTensor(tokens).unsqueeze(1).to(device)  # [src_len, 1]
     src_len = torch.LongTensor([len(tokens)])
-    
+
     with torch.no_grad():
         # Encoder
         _, hidden, cell = model.encoder(src_tensor, src_len)
-        
+
         # Decoder: bắt đầu với <sos>
         tgt_indexes = [tgt_vocab.sos_idx]
-        
+
         for i in range(max_len):
             tgt_tensor = torch.LongTensor([tgt_indexes[-1]]).to(device)
-            
+
             # Decode một bước
             output, hidden, cell = model.decoder(tgt_tensor, hidden, cell)
-            
+
             # Greedy decoding: chọn token có xác suất cao nhất
             pred_token = output.argmax(1).item()
             tgt_indexes.append(pred_token)
-            
+
             # Dừng khi gặp <eos>
             if pred_token == tgt_vocab.eos_idx:
                 break
-    
+
     # Convert indexes → words
     tgt_tokens = [tgt_vocab.idx2word[i] for i in tgt_indexes]
-    
+
     # Remove <sos>, <eos>
     translation = ' '.join(tgt_tokens[1:-1])
-    
+
     return translation
 ```
 
 **Greedy Decoding:**
+
 - Mỗi bước chọn token có xác suất cao nhất: `argmax(p(y_t))`
 - **Ưu điểm:** Nhanh, đơn giản
 - **Nhược điểm:** Không tối ưu toàn cục (có thể bỏ lỡ câu tốt hơn)
@@ -1026,34 +1031,34 @@ def translate_sentence(model, sentence, src_vocab, tgt_vocab,
 ```python
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
-def calculate_bleu(model, data, src_vocab, tgt_vocab, 
+def calculate_bleu(model, data, src_vocab, tgt_vocab,
                    tokenize_src, tokenize_tgt, device='cuda'):
     """
     Tính BLEU score trên test set
-    
+
     BLEU = BP × exp(Σ w_n × log(p_n))
     """
     bleu_scores = []
     smooth = SmoothingFunction()
-    
+
     model.eval()
-    
+
     for src_sentence, tgt_sentence in tqdm(data):
         # Translate
         pred = translate_sentence(model, src_sentence, src_vocab, tgt_vocab,
                                  tokenize_src, device=device)
-        
+
         # Tokenize reference (QUAN TRỌNG: phải dùng spaCy, không dùng .split())
         reference = tokenize_tgt(tgt_sentence.lower())
         candidate = tokenize_tgt(pred.lower())
-        
+
         # Calculate BLEU (1-gram đến 4-gram)
-        score = sentence_bleu([reference], candidate, 
+        score = sentence_bleu([reference], candidate,
                              weights=(0.25, 0.25, 0.25, 0.25),
                              smoothing_function=smooth.method1)
-        
+
         bleu_scores.append(score)
-    
+
     return np.mean(bleu_scores), bleu_scores
 
 # Sử dụng
@@ -1075,6 +1080,7 @@ print(f"Poor (<0.1):      {poor} ({poor/len(all_scores)*100:.1f}%)")
 ```
 
 **Lưu ý quan trọng:**
+
 - ⚠️ **PHẢI dùng spaCy tokenizer**, KHÔNG dùng `.split()`
 - Tokenization khác nhau → BLEU score sai lệch lớn
 - Ví dụ: "l'homme" → spaCy: ["l'", "homme"], split(): ["l'homme"]
